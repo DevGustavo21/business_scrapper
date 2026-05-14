@@ -20,7 +20,9 @@ function LoginForm() {
 
   async function signInWithGoogle() {
     if (!isSupabaseConfigured()) {
-      setMessage('Configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en .env.local.')
+      setMessage(
+        'Crea .env.local con NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY o NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (ver .env.example).',
+      )
       return
     }
     setLoading(true)
@@ -60,9 +62,11 @@ function LoginForm() {
 
       <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 p-6 shadow-sm flex flex-col gap-4">
         {!isSupabaseConfigured() && (
-          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-            Añade en <code className="font-mono">.env.local</code> las variables públicas de Supabase y activa el proveedor
-            Google en el panel de Supabase (Authentication → Providers).
+          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+            En la raíz del proyecto, copia <code className="font-mono">.env.example</code> a{' '}
+            <code className="font-mono">.env.local</code> y rellena la URL y la clave pública de Supabase. En el panel:
+            Authentication → Providers → <strong>Google</strong> (activar y pegar Client ID / Secret de Google Cloud). Los
+            pasos detallados están comentados en <code className="font-mono">.env.example</code>.
           </p>
         )}
         {message && (
