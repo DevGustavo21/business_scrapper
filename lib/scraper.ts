@@ -5,9 +5,9 @@ import { type Negocio, SCRAPE_MAX_MS } from '@/types/business'
 const NAV_WAIT: 'domcontentloaded' = 'domcontentloaded'
 const NAV_TIMEOUT_MS = 24_000
 
-/** Auditorías web completas (navegar el sitio): solo las primeras N por búsqueda; el resto va con texto placeholder (mucho más rápido). */
+/** Auditorías web: pocas en profundidad; el resto placeholder (más filas en el mismo tiempo). */
 function auditBudgetForRun(requested: number): number {
-  return Math.max(1, Math.min(4, Math.ceil(requested / 3)))
+  return Math.max(1, Math.min(4, Math.ceil(requested / 4)))
 }
 
 function placeholderAuditPendiente(): {
@@ -76,31 +76,57 @@ async function newPage(browser: Browser, opts?: { locale?: string }): Promise<Pa
 function mapsPlaceDedupeKey(href: string): string {
   try {
     const u = new URL(href)
-    if (!/\/maps\/place\//i.test(u.pathname)) return href.trim().replace(/\s+/g, ' ').toLowerCase()
+    const host = u.hostname.toLowerCase()
+    const onGoogleMaps =
+      (host.includes('google.') && (u.pathname.includes('/maps') || u.href.includes('/maps'))) ||
+      host === 'maps.google.com'
+    const looksLikeFicha =
+      /\/maps\/place\//i.test(u.pathname) ||
+      /[?&]cid=/i.test(u.search) ||
+      /[?&]ftid=/i.test(u.search)
+    if (!onGoogleMaps || !looksLikeFicha) return href.trim().replace(/\s+/g, ' ').toLowerCase()
     return `${u.origin}${u.pathname}${u.search}${u.hash}`.replace(/\s+/g, '').toLowerCase()
   } catch {
     return href.trim().toLowerCase()
   }
 }
 
+/** Enlaces a fichas de negocio en el panel de resultados (DOM cambia con frecuencia). */
 async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out: string[] = []
     const seen = new Set<string>()
-    const push = (href: string) => {
-      const h = href.trim()
-      if (!h || seen.has(h)) return
-      if (!/\/maps\/place\//i.test(h)) return
-      seen.add(h)
-      out.push(h)
-      if (out.length >= 220) return
+    const push = (raw: string) => {
+      const h = raw.trim()
+      if (!h) return
+      let u: URL
+      try {
+        u = new URL(h)
+      } catch {
+        return
+      }
+      const host = u.hostname.toLowerCase()
+      const href = u.href
+      if (seen.has(href)) return
+      const onGoogleMaps =
+        (host.includes('google.') && (u.pathname.includes('/maps') || href.includes('/maps'))) ||
+        host === 'maps.google.com'
+      if (!onGoogleMaps) return
+      const isFicha =
+        /\/maps\/place\//i.test(u.pathname) ||
+        /[?&]cid=/i.test(u.search) ||
+        /[?&]ftid=/i.test(u.search)
+      if (!isFicha) return
+      seen.add(href)
+      out.push(href)
+      if (out.length >= 360) return
     }
-    for (const a of document.querySelectorAll('a[href*="/maps/place/"]')) {
-      push((a as HTMLAnchorElement).href)
-    }
-    for (const a of document.querySelectorAll('a[href]')) {
-      const h = (a as HTMLAnchorElement).href
-      if (h.includes('google.') && h.includes('/maps/place/')) push(h)
+    const feed = document.querySelector('[role="feed"]')
+    const scanRoots: Element[] = []
+    if (feed) scanRoots.push(feed)
+    if (document.body) scanRoots.push(document.body)
+    for (const root of scanRoots) {
+      root.querySelectorAll('a[href]').forEach(a => push((a as HTMLAnchorElement).href))
     }
     return out
   })
@@ -290,8 +316,13 @@ async function scrapeGoogleMaps(
   placeTitleFailCounts: Map<string, number>,
   auditBudget: { n: number },
 ): Promise<void> {
-  /** 1 en Vercel reduce bloqueos de Google por muchas pestañas a la vez. */
-  const workersHere = process.env.VERCEL ? 1 : 2
+  /** 2 pestañas en paralelo acelera el cupo; `SCRAPE_MAPS_WORKERS=1` si Google limita demasiado. */
+  const workersHere = (() => {
+    const raw = process.env.SCRAPE_MAPS_WORKERS?.trim()
+    if (!raw) return 2
+    const n = parseInt(raw, 10)
+    return Number.isFinite(n) ? Math.min(3, Math.max(1, n)) : 2
+  })()
 
   log('[scraper] Maps: nueva pestaña…')
   const listLocale = browserLocaleForUbicacion(ubicacion)
@@ -322,7 +353,7 @@ async function scrapeGoogleMaps(
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
         if (emit.timeUp()) return
-        await delay(450, 850)
+        await delay(process.env.VERCEL ? 650 : 450, process.env.VERCEL ? 1100 : 850)
         const nombre = await extractMapsPlaceTitle(dp)
         const direccionMaps = await dp.locator('[data-item-id="address"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
@@ -349,7 +380,8 @@ async function scrapeGoogleMaps(
           oportunidades = r.oportunidades
         } else if (auditBudget.n > 0) {
           auditBudget.n--
-          const r = await withTimeout(auditFromWebsite(browser, sitioWeb), 7_500, auditFallback)
+          const auditMs = process.env.VERCEL ? 5_200 : 7_500
+          const r = await withTimeout(auditFromWebsite(browser, sitioWeb), auditMs, auditFallback)
           correo = r.correo
           problemasDetectados = r.problemasDetectados
           oportunidades = r.oportunidades
@@ -383,20 +415,22 @@ async function scrapeGoogleMaps(
     }
 
     let stagnant = 0
-    while (!emit.full() && !emit.timeUp() && stagnant < 12) {
+    while (!emit.full() && !emit.timeUp() && stagnant < 22) {
       const hasFeed = (await page.locator('[role="feed"]').count()) > 0
       if (hasFeed) {
         await feedLoc.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
-        const scrollSteps = Math.min(22, Math.max(14, Math.ceil(cantidadSolicitada * 1.8)))
+        await feedLoc.press('End').catch(() => {})
+        await delay(280, 520)
+        const scrollSteps = Math.min(34, Math.max(18, Math.ceil(cantidadSolicitada * 2.4)))
         for (let s = 0; s < scrollSteps && !emit.timeUp() && !emit.full(); s++) {
-          await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 1200) }, { timeout: 3200 }).catch(() => {})
-          await delay(150, 320)
+          await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 1400) }, { timeout: 3200 }).catch(() => {})
+          await delay(120, 280)
         }
       } else {
         log('[scraper] Maps: sin panel [role=feed]; scroll con rueda')
-        for (let s = 0; s < 12 && !emit.timeUp(); s++) {
-          await page.mouse.wheel(0, 1100)
-          await delay(160, 340)
+        for (let s = 0; s < 18 && !emit.timeUp(); s++) {
+          await page.mouse.wheel(0, 1200)
+          await delay(140, 300)
         }
       }
 
@@ -430,7 +464,14 @@ async function scrapeGoogleMaps(
         }
       }
       const pool = Math.min(workersHere, Math.max(1, fresh.length))
-      await Promise.all(Array.from({ length: pool }, () => runWorker()))
+      await Promise.all(
+        Array.from({ length: pool }, (_, w) =>
+          (async () => {
+            if (w > 0) await delay(180 * w, 420 * w)
+            await runWorker()
+          })(),
+        ),
+      )
     }
   } finally {
     await page.context().close().catch(() => {})
