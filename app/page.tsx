@@ -97,10 +97,8 @@ export default function Home() {
         const { reason, total, requested } = streamDone
         if (total === 0)
           setError('No se encontraron negocios. Intenta con otra categoría o ubicación.')
-        else if (reason === 'timeout')
-          setInfo(`Tiempo máximo (4 min): ${total} de ${requested} solicitados. Puedes exportar lo obtenido.`)
-        else if (reason === 'exhausted' && total < requested)
-          setInfo(`Se obtuvieron ${total} de ${requested} negocios. Puedes exportar el listado.`)
+        else if (reason === 'timeout' && total < requested)
+          setInfo(`Tiempo de búsqueda finalizado (${requested} solicitados): ${total} negocios. Puedes exportar el listado.`)
       }
     } catch (e) {
       const aborted = typeof e === 'object' && e !== null && 'name' in e && (e as { name: string }).name === 'AbortError'

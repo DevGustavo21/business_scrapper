@@ -128,6 +128,7 @@ async function scrapeGoogleMaps(
   cantidadSolicitada: number,
   emit: ScrapeEmit,
   log: (m: string) => void,
+  visitedPlaceUrls: Set<string>,
 ): Promise<void> {
   log('[scraper] Maps: nueva pestaña…')
   const page = await newPage(browser)
@@ -140,7 +141,7 @@ async function scrapeGoogleMaps(
     if (emit.timeUp()) return
     const feedLoc = page.locator('[role="feed"]').first()
     if ((await page.locator('[role="feed"]').count()) > 0) {
-      const scrolls = Math.min(Math.ceil(cantidadSolicitada / 6), 12)
+      const scrolls = Math.min(Math.max(Math.ceil(cantidadSolicitada * 1.5), 14), 28)
       for (let i = 0; i < scrolls && !emit.timeUp(); i++) {
         await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 600) }, { timeout: 5000 }).catch(() => {})
         await delay(700, 1200)
@@ -148,9 +149,11 @@ async function scrapeGoogleMaps(
     }
     log('[scraper] Maps: extrayendo enlaces /maps/place/…')
     const links = await withTimeout(collectMapsPlaceLinks(page), 15_000, [] as string[])
-    log(`[scraper] Maps: ${links.length} enlaces de fichas`)
-    for (const link of links) {
+    const freshLinks = links.filter(l => !visitedPlaceUrls.has(l))
+    log(`[scraper] Maps: ${links.length} enlaces, ${freshLinks.length} aún no visitados`)
+    for (const link of freshLinks) {
       if (emit.timeUp() || emit.full()) break
+      visitedPlaceUrls.add(link)
       const dp = await newPage(browser)
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
@@ -186,6 +189,7 @@ async function scrapeYelp(
   cantidad: number,
   emit: ScrapeEmit,
   log: (m: string) => void,
+  visitedBizUrls: Set<string>,
 ): Promise<void> {
   const page = await newPage(browser)
   try {
@@ -194,9 +198,11 @@ async function scrapeYelp(
     if (emit.timeUp()) return
     await delay(2500, 4000)
     const links = await withTimeout(collectYelpBizLinks(page, cantidad), 15_000, [] as string[])
-    log(`[scraper] Yelp: ${links.length} enlaces /biz/`)
-    for (const link of links) {
+    const freshLinks = links.filter(l => !visitedBizUrls.has(l))
+    log(`[scraper] Yelp: ${links.length} enlaces, ${freshLinks.length} aún no visitados`)
+    for (const link of freshLinks) {
       if (emit.timeUp() || emit.full()) break
+      visitedBizUrls.add(link)
       const dp = await newPage(browser)
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
@@ -294,7 +300,7 @@ async function launchChromium(): Promise<Browser> {
   })
 }
 
-export type StreamScrapeReason = 'target_met' | 'timeout' | 'exhausted'
+export type StreamScrapeReason = 'target_met' | 'timeout'
 
 /**
  * Scrape con emisión incremental (`onNegocio`) y tope de tiempo `maxMs`.
@@ -311,6 +317,8 @@ export async function streamScrapeNegocios(
   const deadline = Date.now() + maxMs
   const log = (m: string) => { console.log(m) }
   const emit = createScrapeEmit(requested, deadline, onNegocio)
+  const visitedMapPlace = new Set<string>()
+  const visitedYelpBiz = new Set<string>()
 
   log(`[scraper] inicio — "${categoria}" / "${ubicacion}" (hasta ${requested}, máx ${Math.round(maxMs / 1000)}s)`)
   const tLaunch = Date.now()
@@ -328,32 +336,48 @@ export async function streamScrapeNegocios(
   log(`[scraper] Chromium listo (+${Date.now() - tLaunch} ms)`)
 
   try {
-    await scrapeGoogleMaps(browser, categoria, ubicacion, requested, emit, log).catch(err => {
-      console.error('[scraper] Google Maps failed:', err instanceof Error ? err.message : err)
-    })
-    log(`[scraper] Maps → ${emit.count()} filas`)
+    let round = 0
+    while (!emit.full() && !emit.timeUp()) {
+      round++
+      log(`[scraper] ronda ${round} (hasta ${requested}, ${emit.count()} ya guardados)`)
+      const before = emit.count()
 
-    if (!emit.timeUp() && !emit.full() && emit.count() < Math.ceil(requested * 0.5)) {
-      log('[scraper] fallback Yelp')
-      await scrapeYelp(browser, categoria, ubicacion, requested - emit.count(), emit, log).catch(err => {
-        console.error('[scraper] Yelp failed:', err instanceof Error ? err.message : err)
+      await scrapeGoogleMaps(browser, categoria, ubicacion, requested, emit, log, visitedMapPlace).catch(err => {
+        console.error('[scraper] Google Maps failed:', err instanceof Error ? err.message : err)
       })
-    }
-    log(`[scraper] tras Yelp → ${emit.count()} filas`)
+      log(`[scraper] Maps → ${emit.count()} acumulado`)
 
-    if (!emit.timeUp() && !emit.full() && emit.count() < Math.ceil(requested * 0.5)) {
-      log('[scraper] fallback Páginas Amarillas')
-      await scrapePaginasAmarillas(browser, categoria, ubicacion, requested - emit.count(), emit, log).catch(err => {
-        console.error('[scraper] Páginas Amarillas failed:', err instanceof Error ? err.message : err)
-      })
+      if (emit.full() || emit.timeUp()) break
+
+      if (emit.count() < requested) {
+        log('[scraper] fallback Yelp')
+        await scrapeYelp(browser, categoria, ubicacion, requested - emit.count(), emit, log, visitedYelpBiz).catch(err => {
+          console.error('[scraper] Yelp failed:', err instanceof Error ? err.message : err)
+        })
+      }
+      log(`[scraper] tras Yelp → ${emit.count()}`)
+
+      if (emit.full() || emit.timeUp()) break
+
+      if (emit.count() < requested) {
+        log('[scraper] fallback Páginas Amarillas')
+        await scrapePaginasAmarillas(browser, categoria, ubicacion, requested - emit.count(), emit, log).catch(err => {
+          console.error('[scraper] Páginas Amarillas failed:', err instanceof Error ? err.message : err)
+        })
+      }
+
+      const gained = emit.count() - before
+      if (gained === 0) {
+        log('[scraper] sin nuevos en esta ronda; pausa antes de repetir…')
+        await delay(5000, 9000)
+      } else {
+        await delay(1500, 3000)
+      }
     }
 
     const total = emit.count()
-    let reason: StreamScrapeReason
-    if (emit.full()) reason = 'target_met'
-    else if (emit.timeUp()) reason = 'timeout'
-    else reason = 'exhausted'
-    log(`[scraper] fin → ${total} negocios (${reason})`)
+    const reason: StreamScrapeReason = emit.full() ? 'target_met' : 'timeout'
+    log(`[scraper] fin → ${total} negocios (${reason}, ${round} ronda(s))`)
     return { reason, total, requested }
   } finally {
     await browser.close().catch(() => {})

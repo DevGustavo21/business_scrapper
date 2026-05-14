@@ -22,7 +22,7 @@ export const SCRAPE_MAX_MS = 4 * 60 * 1000
 
 /** Payload del evento SSE `done` al terminar el scrape en streaming. */
 export type ScrapeStreamDone = {
-  reason: 'target_met' | 'timeout' | 'exhausted'
+  reason: 'target_met' | 'timeout'
   total: number
   requested: number
 }
