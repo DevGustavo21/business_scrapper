@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('npx playwright install chromium',{stdio:'inherit'})}\""
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.8",

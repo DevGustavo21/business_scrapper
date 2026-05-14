@@ -1,4 +1,4 @@
-import type { Browser, Page } from 'playwright-core'
+import { chromium, type Browser, type Page } from 'playwright-core'
 import { Negocio, SCRAPE_MAX_MS } from '@/types/business'
 
 /** SPAs como Maps/Yelp casi nunca llegan a "networkidle". */
@@ -263,7 +263,6 @@ async function scrapePaginasAmarillas(
 
 async function launchChromium(): Promise<Browser> {
   if (process.env.VERCEL) {
-    const { chromium } = await import('playwright-core')
     const SpChromium = (await import('@sparticuz/chromium')).default
     SpChromium.setGraphicsMode = false
     const executablePath = await SpChromium.executablePath()
@@ -274,7 +273,6 @@ async function launchChromium(): Promise<Browser> {
       timeout: 60_000,
     })
   }
-  const { chromium } = await import('playwright')
   return chromium.launch({
     headless: true,
     timeout: 60_000,
