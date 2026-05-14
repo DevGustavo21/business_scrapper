@@ -8,11 +8,13 @@ import { updateSession } from './lib/supabase/updateSession'
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
   const code = url.searchParams.get('code')
-  if (
-    code &&
-    url.pathname !== '/auth/callback' &&
-    (url.pathname === '/' || url.pathname === '/login')
-  ) {
+  const skipOAuthRedirect =
+    !code ||
+    url.pathname === '/auth/callback' ||
+    url.pathname.startsWith('/api') ||
+    url.pathname.startsWith('/_next')
+
+  if (!skipOAuthRedirect) {
     const dest = new URL('/auth/callback', request.url)
     dest.search = url.search
     return NextResponse.redirect(dest)
