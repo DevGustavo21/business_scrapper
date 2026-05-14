@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { streamScrapeNegocios } from '@/lib/scraper'
-import { ScrapeRequest, ScrapeStreamDone, SCRAPE_MAX_MS } from '@/types/business'
+import { type ScrapeRequest, type ScrapeStreamDone, SCRAPE_MAX_MS } from '@/types/business'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -35,12 +35,8 @@ export async function POST(req: NextRequest): Promise<Response> {
         controller.enqueue(sseEncode(event, data))
       }
       try {
-        const { reason, total, requested } = await streamScrapeNegocios(
-          categoria,
-          ubicacion,
-          qty,
-          SCRAPE_MAX_MS,
-          n => send('negocio', n),
+        const { reason, total, requested } = await streamScrapeNegocios(categoria, ubicacion, qty, SCRAPE_MAX_MS, n =>
+          send('negocio', n),
         )
         const done: ScrapeStreamDone = { reason, total, requested }
         send('done', done)

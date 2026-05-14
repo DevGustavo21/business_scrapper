@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scrapeNegocios } from '@/lib/scraper'
-import { ScrapeRequest, ScrapeResponse } from '@/types/business'
+import { type ScrapeRequest, type ScrapeResponse } from '@/types/business'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300

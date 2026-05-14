@@ -1,5 +1,5 @@
 import { chromium, type Browser, type Page } from 'playwright-core'
-import { Negocio, SCRAPE_MAX_MS } from '@/types/business'
+import { type Negocio, SCRAPE_MAX_MS } from '@/types/business'
 
 /** SPAs como Maps casi nunca llegan a "networkidle". */
 const NAV_WAIT: 'domcontentloaded' = 'domcontentloaded'
@@ -17,6 +17,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
+/**
+ * Separa el texto de dirección típico de Maps/directorio (segmentos por comas)
+ * en calle / ciudad / país. Heurística: con 3+ partes, última = país, penúltima = ciudad.
+ */
+function splitDireccionResultado(raw: string): { direccion: string; ciudad: string; pais: string } {
+  const t = raw.replace(/\s+/g, ' ').trim()
+  if (!t) return { direccion: '', ciudad: '', pais: '' }
+  const parts = t.split(',').map(p => p.trim()).filter(Boolean)
+  if (parts.length === 1) return { direccion: parts[0], ciudad: '', pais: '' }
+  if (parts.length === 2) return { direccion: parts[0], ciudad: parts[1], pais: '' }
+  const pais = parts[parts.length - 1] ?? ''
+  const ciudad = parts[parts.length - 2] ?? ''
+  const direccion = parts.slice(0, -2).join(', ')
+  return { direccion, ciudad, pais }
+}
+
 // Bloqueo de assets por URL (evita globs complejos en page.route).
 const ASSET_URL = /\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot)(\?|#|$)/i
 
@@ -32,12 +48,56 @@ async function newPage(browser: Browser): Promise<Page> {
   return page
 }
 
+/** Misma ficha con distintos query params cuenta una sola vez para visitas / dedupe. */
+function normalizeMapsPlaceUrl(href: string): string {
+  try {
+    const u = new URL(href)
+    if (!u.pathname.includes('/maps/place/')) return href
+    return `${u.origin}${u.pathname}`
+  } catch {
+    return href
+  }
+}
+
 async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const hrefs = [...document.querySelectorAll('a[href*="/maps/place/"]')]
       .map(a => (a as HTMLAnchorElement).href)
-    return [...new Set(hrefs)].slice(0, 100)
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const h of hrefs) {
+      if (seen.has(h)) continue
+      seen.add(h)
+      out.push(h)
+      if (out.length >= 120) break
+    }
+    return out
   })
+}
+
+/** Maps hidrata el título con retraso; varios selectores por cambios de DOM. */
+async function extractMapsPlaceTitle(page: Page): Promise<string> {
+  const junk = (s: string) => {
+    const t = s.trim()
+    return t.length < 2 || /resultados de búsqueda|^google maps$/i.test(t)
+  }
+  const selectors = [
+    'h1.DUwDvf',
+    'h1[class*="DUwDvf"]',
+    'div[role="main"] h1',
+    '[role="main"] h1',
+    'header h1',
+    'h1',
+  ]
+  for (const sel of selectors) {
+    const raw = await page.locator(sel).first().innerText({ timeout: 4500 }).catch(() => '')
+    const trimmed = raw?.trim() ?? ''
+    if (trimmed && !junk(trimmed)) return trimmed
+  }
+  await delay(700, 1200)
+  const raw = await page.locator('h1').first().innerText({ timeout: 5000 }).catch(() => '')
+  const trimmed = raw?.trim() ?? ''
+  return junk(trimmed) ? '' : trimmed
 }
 
 async function extractEmail(page: Page): Promise<string> {
@@ -50,31 +110,92 @@ async function extractEmail(page: Page): Promise<string> {
   )[0] ?? ''
 }
 
-async function enrichFromWebsite(browser: Browser, sitioWeb: string): Promise<{ correo: string; nombreDueno: string }> {
-  if (!sitioWeb) return { correo: '', nombreDueno: '' }
+const SIN_WEB_PROBLEMAS =
+  'No hay sitio web enlazado o la URL está vacía: no se puede auditar rendimiento, accesibilidad ni SEO del dominio propio desde el listado.'
+const SIN_WEB_OPORTUNIDADES =
+  'Crear un sitio responsive con identidad de marca coherente, datos de contacto visibles (NAP), formulario o WhatsApp, y SEO on-page (título único, meta descripción, datos estructurados locales).'
+
+async function auditFromWebsite(
+  browser: Browser,
+  sitioWeb: string,
+): Promise<{ correo: string; problemasDetectados: string; oportunidades: string }> {
+  if (!sitioWeb?.trim())
+    return { correo: '', problemasDetectados: SIN_WEB_PROBLEMAS, oportunidades: SIN_WEB_OPORTUNIDADES }
+  let url = sitioWeb.trim()
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`
   let page: Page | null = null
   try {
     page = await newPage(browser)
-    await page.goto(sitioWeb, { waitUntil: 'domcontentloaded', timeout: 8000 })
-    await delay(200, 450)
+    const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12_000 })
+    await delay(280, 520)
     const correo = await extractEmail(page)
-    let nombreDueno = ''
-    const aboutLinks = await page.$$eval('a', els =>
-      els.filter(a => /about|contact|nosotros|equipo|team/i.test(a.href + a.textContent))
-        .map(a => a.href).slice(0, 1)
-    )
-    for (const link of aboutLinks) {
-      try {
-        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 6000 })
-        await delay(200, 450)
-        const body = await page.innerText('body').catch(() => '')
-        const m = body.match(/(?:founder|owner|director|dueño|propietario|CEO)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/)
-        if (m) { nombreDueno = m[1]; break }
-      } catch { /* ignore */ }
-    }
-    return { correo, nombreDueno }
+    const status = res?.status() ?? 0
+    const audit = await page.evaluate(() => {
+      const problemas: string[] = []
+      const oportunidades: string[] = []
+
+      const title = (document.title || '').trim()
+      if (title.length < 12) problemas.push('Título de página muy corto o poco descriptivo (SEO y branding).')
+      if (title.length > 68) problemas.push('Título muy largo: puede truncarse en resultados de búsqueda.')
+
+      const md = document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() ?? ''
+      if (!md) problemas.push('Falta meta descripción (menor control del snippet en Google).')
+      else if (md.length < 90) oportunidades.push('Ampliar la meta descripción con propuesta de valor y llamada a la acción.')
+
+      const h1n = document.querySelectorAll('h1').length
+      if (h1n === 0) problemas.push('No hay H1 claro (jerarquía de contenido y SEO).')
+      if (h1n > 1) problemas.push('Varios H1 en la misma vista: conviene un único encabezado principal.')
+
+      if (!document.querySelector('meta[name="viewport"]'))
+        problemas.push('Sin meta viewport: la experiencia móvil puede verse rota (UX).')
+
+      if (location.protocol === 'http:')
+        problemas.push('Contenido servido por HTTP: conviene HTTPS (confianza y SEO).')
+
+      const lang = document.documentElement.getAttribute('lang')
+      if (!lang) problemas.push('Falta atributo lang en <html> (accesibilidad y lectores de pantalla).')
+
+      const imgs = [...document.querySelectorAll('img')]
+      const sinAlt = imgs.filter(i => !(i.getAttribute('alt') ?? '').trim()).length
+      if (imgs.length > 0 && sinAlt >= Math.ceil(imgs.length * 0.4))
+        problemas.push(`Muchas imágenes sin atributo alt (${sinAlt}/${imgs.length}) (accesibilidad).`)
+
+      let blankUnsafe = 0
+      document.querySelectorAll('a[target="_blank"]').forEach(a => {
+        if (!/\bnoopener\b/i.test(a.getAttribute('rel') || '')) blankUnsafe++
+      })
+      if (blankUnsafe > 0)
+        problemas.push('Enlaces con target="_blank" sin rel="noopener" (seguridad y buenas prácticas).')
+
+      const bodyText = (document.body?.innerText || '').replace(/\s+/g, ' ').trim()
+      if (bodyText.length < 180)
+        problemas.push('Poco texto visible en portada: refuerza oferta y palabras clave (SEO y claridad).')
+
+      if (problemas.length === 0)
+        problemas.push('No se detectaron incidencias graves automáticas en la portada cargada.')
+
+      oportunidades.push('Revisar contraste de botones y enlaces (WCAG), espaciado y tipografía para legibilidad (UX).')
+      oportunidades.push('Unificar tono visual (logo, colores, botones) y repetir la propuesta de valor arriba del fold (branding).')
+      if (!document.querySelector('link[rel="canonical"]'))
+        oportunidades.push('Valorar etiqueta canonical si existen URLs duplicadas o parámetros (SEO técnico).')
+      if (!md) oportunidades.push('Añadir meta descripción única orientada a conversión local.')
+
+      return { problemas, oportunidades }
+    })
+
+    const extra: string[] = []
+    if (status >= 400) extra.push(`Respuesta HTTP ${status} al cargar la URL.`)
+    const problemasDetectados = [...extra, ...audit.problemas].join(' ')
+    const oportunidades = [...new Set(audit.oportunidades)].join(' ')
+    return { correo, problemasDetectados, oportunidades }
   } catch {
-    return { correo: '', nombreDueno: '' }
+    return {
+      correo: '',
+      problemasDetectados:
+        'No se pudo cargar el sitio web (timeout, bloqueo o error de red). No se completó la auditoría automática.',
+      oportunidades:
+        'Verificar que la URL sea correcta, que el servidor permita bots y valorar una auditoría manual de UX/UI, rendimiento (Core Web Vitals) y SEO técnico.',
+    }
   } finally {
     await page?.context().close().catch(() => {})
   }
@@ -120,6 +241,8 @@ async function scrapeGoogleMaps(
   emit: ScrapeEmit,
   log: (m: string) => void,
   visitedPlaceUrls: Set<string>,
+  /** Intentos sin título por URL normalizada; evita bucles infinitos si Maps no hidrata. */
+  placeTitleFailCounts: Map<string, number>,
 ): Promise<void> {
   log('[scraper] Maps: nueva pestaña…')
   const page = await newPage(browser)
@@ -140,29 +263,62 @@ async function scrapeGoogleMaps(
     }
     log('[scraper] Maps: extrayendo enlaces /maps/place/…')
     const links = await withTimeout(collectMapsPlaceLinks(page), 15_000, [] as string[])
-    const freshLinks = links.filter(l => !visitedPlaceUrls.has(l))
+    const freshLinks = links.filter(l => !visitedPlaceUrls.has(normalizeMapsPlaceUrl(l)))
     log(`[scraper] Maps: ${links.length} enlaces, ${freshLinks.length} aún no visitados`)
     for (const link of freshLinks) {
       if (emit.timeUp() || emit.full()) break
-      visitedPlaceUrls.add(link)
+      const placeKey = normalizeMapsPlaceUrl(link)
+      if (visitedPlaceUrls.has(placeKey)) continue
       const dp = await newPage(browser)
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
         if (emit.timeUp()) break
         await delay(900, 1600)
-        const nombre = await dp.locator('h1').first().innerText({ timeout: 6000 }).catch(() => '')
-        const ubicacionText = await dp.locator('[data-item-id="address"]').innerText()
+        const nombre = await extractMapsPlaceTitle(dp)
+        const direccionMaps = await dp.locator('[data-item-id="address"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
         const telefono = await dp.locator('[data-item-id^="phone"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy phone number"]').innerText().catch(() => ''))
         let sitioWeb = ''
         const webEl = await dp.$('a[data-item-id="authority"]')
         if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
-        if (!nombre) continue
-        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 6000, { correo: '', nombreDueno: '' })
+        if (!nombre) {
+          const fails = (placeTitleFailCounts.get(placeKey) ?? 0) + 1
+          placeTitleFailCounts.set(placeKey, fails)
+          if (fails >= 2) visitedPlaceUrls.add(placeKey)
+          log(`[scraper] Maps: sin nombre (intento ${fails}/2) ${placeKey.slice(0, 80)}`)
+          continue
+        }
+        const auditFallback = {
+          correo: '',
+          problemasDetectados:
+            'Auditoría automática no disponible por tiempo o error; revisar el sitio manualmente.',
+          oportunidades:
+            'Completar revisión de UX/UI, jerarquía visual, copy y SEO on-page con herramientas externas.',
+        }
+        const { correo, problemasDetectados, oportunidades } = await withTimeout(
+          auditFromWebsite(browser, sitioWeb),
+          14_000,
+          auditFallback,
+        )
         if (emit.timeUp()) break
-        emit.tryEmit({ nombre: nombre.trim(), ubicacion: ubicacionText.trim(), telefono: telefono.trim(), correo, sitioWeb, nombreDueno })
-      } catch { /* skip */ } finally {
+        const { direccion, ciudad, pais } = splitDireccionResultado(direccionMaps)
+        emit.tryEmit({
+          nombre: nombre.trim(),
+          direccion,
+          ciudad,
+          pais,
+          telefono: telefono.trim(),
+          correo,
+          sitioWeb,
+          problemasDetectados,
+          oportunidades,
+          estado: 'Sin contactar',
+        })
+        visitedPlaceUrls.add(placeKey)
+      } catch (e) {
+        log(`[scraper] Maps: error ficha ${placeKey.slice(0, 80)} — ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
         await dp.context().close().catch(() => {})
         await delay(400, 800)
       }
@@ -192,15 +348,38 @@ async function scrapePaginasAmarillas(
       if (emit.timeUp() || emit.full()) break
       try {
         const nombre = await listing.$eval('a.business-result-title, h2 a, .title a', (el: Element) => el.textContent?.trim() ?? '').catch(() => '')
-        const ubicacionText = await listing.$eval('.address, address, .location', (el: Element) => el.textContent?.trim() ?? '').catch(() => '')
+        const direccionListado = await listing.$eval('.address, address, .location', (el: Element) => el.textContent?.trim() ?? '').catch(() => '')
         const telefono = await listing.$eval('.phone, .telefonos, [class*="phone"]', (el: Element) => el.textContent?.trim() ?? '').catch(() => '')
         let sitioWeb = ''
         const webEl = await listing.$('a[href^="http"]:not([href*="paginasamarillas"])')
         if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
         if (!nombre) continue
-        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 6000, { correo: '', nombreDueno: '' })
+        const auditFallback = {
+          correo: '',
+          problemasDetectados:
+            'Auditoría automática no disponible por tiempo o error; revisar el sitio manualmente.',
+          oportunidades:
+            'Completar revisión de UX/UI, jerarquía visual, copy y SEO on-page con herramientas externas.',
+        }
+        const { correo, problemasDetectados, oportunidades } = await withTimeout(
+          auditFromWebsite(browser, sitioWeb),
+          14_000,
+          auditFallback,
+        )
         if (emit.timeUp()) break
-        emit.tryEmit({ nombre, ubicacion: ubicacionText, telefono, correo, sitioWeb, nombreDueno })
+        const { direccion, ciudad, pais } = splitDireccionResultado(direccionListado)
+        emit.tryEmit({
+          nombre,
+          direccion,
+          ciudad,
+          pais,
+          telefono,
+          correo,
+          sitioWeb,
+          problemasDetectados,
+          oportunidades,
+          estado: 'Sin contactar',
+        })
       } catch { /* skip */ }
       await delay(400, 800)
     }
@@ -262,6 +441,7 @@ export async function streamScrapeNegocios(
   const log = (m: string) => { console.log(m) }
   const emit = createScrapeEmit(requested, deadline, onNegocio)
   const visitedMapPlace = new Set<string>()
+  const mapsPlaceTitleFails = new Map<string, number>()
 
   log(`[scraper] inicio — "${categoria}" / "${ubicacion}" (hasta ${requested}, máx ${Math.round(maxMs / 1000)}s)`)
   const tLaunch = Date.now()
@@ -285,7 +465,7 @@ export async function streamScrapeNegocios(
       log(`[scraper] ronda ${round} (hasta ${requested}, ${emit.count()} ya guardados)`)
       const before = emit.count()
 
-      await scrapeGoogleMaps(browser, categoria, ubicacion, requested, emit, log, visitedMapPlace).catch(err => {
+      await scrapeGoogleMaps(browser, categoria, ubicacion, requested, emit, log, visitedMapPlace, mapsPlaceTitleFails).catch(err => {
         console.error('[scraper] Google Maps failed:', err instanceof Error ? err.message : err)
       })
       log(`[scraper] Maps → ${emit.count()} acumulado`)
