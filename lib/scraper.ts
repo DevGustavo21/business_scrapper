@@ -1,7 +1,7 @@
 import { chromium, type Browser, type Page } from 'playwright-core'
 import { Negocio, SCRAPE_MAX_MS } from '@/types/business'
 
-/** SPAs como Maps/Yelp casi nunca llegan a "networkidle". */
+/** SPAs como Maps casi nunca llegan a "networkidle". */
 const NAV_WAIT: 'domcontentloaded' = 'domcontentloaded'
 const NAV_TIMEOUT_MS = 28_000
 
@@ -40,15 +40,6 @@ async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   })
 }
 
-async function collectYelpBizLinks(page: Page, max: number): Promise<string[]> {
-  return page.evaluate((lim: number) => {
-    const hrefs = [...document.querySelectorAll('a[href*="/biz/"]')]
-      .map(a => (a as HTMLAnchorElement).href)
-      .filter(h => h.includes('/biz/') && !h.includes('?'))
-    return [...new Set(hrefs)].slice(0, lim)
-  }, max)
-}
-
 async function extractEmail(page: Page): Promise<string> {
   const text = await page.content()
   const match = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
@@ -64,18 +55,18 @@ async function enrichFromWebsite(browser: Browser, sitioWeb: string): Promise<{ 
   let page: Page | null = null
   try {
     page = await newPage(browser)
-    await page.goto(sitioWeb, { waitUntil: 'domcontentloaded', timeout: 15000 })
-    await delay(500, 1000)
+    await page.goto(sitioWeb, { waitUntil: 'domcontentloaded', timeout: 8000 })
+    await delay(200, 450)
     const correo = await extractEmail(page)
     let nombreDueno = ''
     const aboutLinks = await page.$$eval('a', els =>
       els.filter(a => /about|contact|nosotros|equipo|team/i.test(a.href + a.textContent))
-        .map(a => a.href).slice(0, 2)
+        .map(a => a.href).slice(0, 1)
     )
     for (const link of aboutLinks) {
       try {
-        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 10000 })
-        await delay(400, 800)
+        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 6000 })
+        await delay(200, 450)
         const body = await page.innerText('body').catch(() => '')
         const m = body.match(/(?:founder|owner|director|dueño|propietario|CEO)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/)
         if (m) { nombreDueno = m[1]; break }
@@ -137,14 +128,14 @@ async function scrapeGoogleMaps(
     log('[scraper] Maps: goto listado…')
     await page.goto(listUrl, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
     if (emit.timeUp()) return
-    await delay(3500, 5500)
+    await delay(2200, 3600)
     if (emit.timeUp()) return
     const feedLoc = page.locator('[role="feed"]').first()
     if ((await page.locator('[role="feed"]').count()) > 0) {
-      const scrolls = Math.min(Math.max(Math.ceil(cantidadSolicitada * 1.5), 14), 28)
+      const scrolls = Math.min(Math.max(Math.ceil(cantidadSolicitada * 1.2), 10), 22)
       for (let i = 0; i < scrolls && !emit.timeUp(); i++) {
-        await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 600) }, { timeout: 5000 }).catch(() => {})
-        await delay(700, 1200)
+        await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 600) }, { timeout: 4000 }).catch(() => {})
+        await delay(400, 750)
       }
     }
     log('[scraper] Maps: extrayendo enlaces /maps/place/…')
@@ -158,8 +149,8 @@ async function scrapeGoogleMaps(
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
         if (emit.timeUp()) break
-        await delay(2000, 3200)
-        const nombre = await dp.locator('h1').first().innerText({ timeout: 8000 }).catch(() => '')
+        await delay(900, 1600)
+        const nombre = await dp.locator('h1').first().innerText({ timeout: 6000 }).catch(() => '')
         const ubicacionText = await dp.locator('[data-item-id="address"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
         const telefono = await dp.locator('[data-item-id^="phone"]').innerText()
@@ -168,12 +159,12 @@ async function scrapeGoogleMaps(
         const webEl = await dp.$('a[data-item-id="authority"]')
         if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
         if (!nombre) continue
-        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 12_000, { correo: '', nombreDueno: '' })
+        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 6000, { correo: '', nombreDueno: '' })
         if (emit.timeUp()) break
         emit.tryEmit({ nombre: nombre.trim(), ubicacion: ubicacionText.trim(), telefono: telefono.trim(), correo, sitioWeb, nombreDueno })
       } catch { /* skip */ } finally {
         await dp.context().close().catch(() => {})
-        await delay(1000, 2000)
+        await delay(400, 800)
       }
     }
   } finally {
@@ -181,54 +172,7 @@ async function scrapeGoogleMaps(
   }
 }
 
-// ── Source 2: Yelp ────────────────────────────────────────────────────────────
-async function scrapeYelp(
-  browser: Browser,
-  categoria: string,
-  ubicacion: string,
-  cantidad: number,
-  emit: ScrapeEmit,
-  log: (m: string) => void,
-  visitedBizUrls: Set<string>,
-): Promise<void> {
-  const page = await newPage(browser)
-  try {
-    log('[scraper] Yelp: goto búsqueda…')
-    await page.goto(`https://www.yelp.com/search?find_desc=${encodeURIComponent(categoria)}&find_loc=${encodeURIComponent(ubicacion)}`, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
-    if (emit.timeUp()) return
-    await delay(2500, 4000)
-    const links = await withTimeout(collectYelpBizLinks(page, cantidad), 15_000, [] as string[])
-    const freshLinks = links.filter(l => !visitedBizUrls.has(l))
-    log(`[scraper] Yelp: ${links.length} enlaces, ${freshLinks.length} aún no visitados`)
-    for (const link of freshLinks) {
-      if (emit.timeUp() || emit.full()) break
-      visitedBizUrls.add(link)
-      const dp = await newPage(browser)
-      try {
-        await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
-        if (emit.timeUp()) break
-        await delay(1800, 2800)
-        const nombre = await dp.locator('h1').first().innerText({ timeout: 8000 }).catch(() => '')
-        const ubicacionText = await dp.locator('address').first().innerText().catch(() => '')
-        const telefono = await dp.locator('p:has-text("(") >> nth=0').innerText().catch(() => '')
-        let sitioWeb = ''
-        const webEl = await dp.$('a[href*="biz_redir"]')
-        if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
-        if (!nombre) continue
-        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 12_000, { correo: '', nombreDueno: '' })
-        if (emit.timeUp()) break
-        emit.tryEmit({ nombre: nombre.trim(), ubicacion: ubicacionText.trim().replace(/\n/g, ', '), telefono: telefono.trim(), correo, sitioWeb, nombreDueno })
-      } catch { /* skip */ } finally {
-        await dp.context().close().catch(() => {})
-        await delay(1000, 2000)
-      }
-    }
-  } finally {
-    await page.context().close().catch(() => {})
-  }
-}
-
-// ── Source 3: Páginas Amarillas ───────────────────────────────────────────────
+// ── Source 2: directorio web (Páginas Amarillas) ─────────────────────────────
 async function scrapePaginasAmarillas(
   browser: Browser,
   categoria: string,
@@ -242,7 +186,7 @@ async function scrapePaginasAmarillas(
   try {
     await page.goto(`https://www.paginasamarillas.es/search/${encodeURIComponent(categoria)}/all-ma/all-pr/all-is/${encodeURIComponent(ubicacion)}/all-ba/all-pu/1`, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
     if (emit.timeUp()) return
-    await delay(2500, 4000)
+    await delay(1500, 2600)
     const listings = await page.$$('article.business-result-content, li.elem')
     for (const listing of listings) {
       if (emit.timeUp() || emit.full()) break
@@ -254,11 +198,11 @@ async function scrapePaginasAmarillas(
         const webEl = await listing.$('a[href^="http"]:not([href*="paginasamarillas"])')
         if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
         if (!nombre) continue
-        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 12_000, { correo: '', nombreDueno: '' })
+        const { correo, nombreDueno } = await withTimeout(enrichFromWebsite(browser, sitioWeb), 6000, { correo: '', nombreDueno: '' })
         if (emit.timeUp()) break
         emit.tryEmit({ nombre, ubicacion: ubicacionText, telefono, correo, sitioWeb, nombreDueno })
       } catch { /* skip */ }
-      await delay(800, 1500)
+      await delay(400, 800)
     }
   } finally {
     await page.context().close().catch(() => {})
@@ -318,7 +262,6 @@ export async function streamScrapeNegocios(
   const log = (m: string) => { console.log(m) }
   const emit = createScrapeEmit(requested, deadline, onNegocio)
   const visitedMapPlace = new Set<string>()
-  const visitedYelpBiz = new Set<string>()
 
   log(`[scraper] inicio — "${categoria}" / "${ubicacion}" (hasta ${requested}, máx ${Math.round(maxMs / 1000)}s)`)
   const tLaunch = Date.now()
@@ -350,28 +293,19 @@ export async function streamScrapeNegocios(
       if (emit.full() || emit.timeUp()) break
 
       if (emit.count() < requested) {
-        log('[scraper] fallback Yelp')
-        await scrapeYelp(browser, categoria, ubicacion, requested - emit.count(), emit, log, visitedYelpBiz).catch(err => {
-          console.error('[scraper] Yelp failed:', err instanceof Error ? err.message : err)
-        })
-      }
-      log(`[scraper] tras Yelp → ${emit.count()}`)
-
-      if (emit.full() || emit.timeUp()) break
-
-      if (emit.count() < requested) {
-        log('[scraper] fallback Páginas Amarillas')
+        log('[scraper] complemento: Páginas Amarillas (directorio web)')
         await scrapePaginasAmarillas(browser, categoria, ubicacion, requested - emit.count(), emit, log).catch(err => {
           console.error('[scraper] Páginas Amarillas failed:', err instanceof Error ? err.message : err)
         })
       }
+      log(`[scraper] tras directorio → ${emit.count()}`)
 
       const gained = emit.count() - before
       if (gained === 0) {
         log('[scraper] sin nuevos en esta ronda; pausa antes de repetir…')
-        await delay(5000, 9000)
+        await delay(3500, 6000)
       } else {
-        await delay(1500, 3000)
+        await delay(800, 1600)
       }
     }
 

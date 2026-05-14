@@ -132,7 +132,7 @@ export default function Home() {
         <SearchPanel onSearch={handleSearch} loading={loading} />
         {loading && (
           <p className="text-center text-sm text-neutral-500 dark:text-neutral-400 max-w-xl mx-auto -mt-4">
-            Los resultados aparecen en la tabla conforme se extraen. La búsqueda se detiene a los 4 minutos como máximo; puedes exportar aunque no se alcance la cantidad pedida.
+            Los resultados aparecen al vuelo. Fuentes: <strong>Google Maps</strong> y, si hace falta, <strong>Páginas Amarillas</strong> (web); cada negocio puede enriquecerse desde su sitio. La búsqueda usa hasta 4 minutos; puedes exportar antes si quieres.
           </p>
         )}
         {negocios.length > 0 && (
