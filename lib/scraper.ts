@@ -263,15 +263,29 @@ async function scrapePaginasAmarillas(
 
 async function launchChromium(): Promise<Browser> {
   if (process.env.VERCEL) {
-    const SpChromium = (await import('@sparticuz/chromium')).default
-    SpChromium.setGraphicsMode = false
-    const executablePath = await SpChromium.executablePath()
-    return chromium.launch({
-      args: [...SpChromium.args, '--disable-dev-shm-usage'],
-      executablePath,
-      headless: true,
-      timeout: 60_000,
-    })
+    // @sparticuz/chromium solo extrae al2/al2023 (libnss3, etc.) si cree que está en AWS Lambda.
+    // En Vercel no hay AWS_* → hay que simularlo ANTES del primer import del paquete.
+    const savedAws = process.env.AWS_EXECUTION_ENV
+    const nodeMajor = Number(process.versions.node.split('.')[0])
+    process.env.AWS_EXECUTION_ENV =
+      nodeMajor >= 20 ? 'AWS_Lambda_nodejs20.x' : 'AWS_Lambda_nodejs18.x'
+    try {
+      const SpChromium = (await import('@sparticuz/chromium')).default
+      const executablePath = await SpChromium.executablePath()
+      const nssLib = nodeMajor >= 20 ? '/tmp/al2023/lib' : '/tmp/al2/lib'
+      if (!process.env.LD_LIBRARY_PATH?.includes(nssLib)) {
+        process.env.LD_LIBRARY_PATH = [nssLib, process.env.LD_LIBRARY_PATH].filter(Boolean).join(':')
+      }
+      return chromium.launch({
+        args: [...SpChromium.args, '--disable-dev-shm-usage'],
+        executablePath,
+        headless: true,
+        timeout: 60_000,
+      })
+    } finally {
+      if (savedAws === undefined) delete process.env.AWS_EXECUTION_ENV
+      else process.env.AWS_EXECUTION_ENV = savedAws
+    }
   }
   return chromium.launch({
     headless: true,
