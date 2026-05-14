@@ -67,14 +67,19 @@ async function newPage(browser: Browser, opts?: { locale?: string }): Promise<Pa
   return page
 }
 
-/** Misma ficha con distintos query params cuenta una sola vez para visitas / dedupe. */
-function normalizeMapsPlaceUrl(href: string): string {
+/**
+ * Clave de dedupe por URL de ficha Maps.
+ * Antes solo se usaba `origin + pathname`; en el listado actual muchos enlaces comparten el mismo
+ * pathname y difieren en `search`, `hash` o en el segmento `/data=...` — eso colapsaba todo en 1 clave
+ * y solo se emitía un negocio aunque el feed mostrara muchas filas.
+ */
+function mapsPlaceDedupeKey(href: string): string {
   try {
     const u = new URL(href)
-    if (!u.pathname.includes('/maps/place/')) return href
-    return `${u.origin}${u.pathname}`
+    if (!/\/maps\/place\//i.test(u.pathname)) return href.trim().replace(/\s+/g, ' ').toLowerCase()
+    return `${u.origin}${u.pathname}${u.search}${u.hash}`.replace(/\s+/g, '').toLowerCase()
   } catch {
-    return href
+    return href.trim().toLowerCase()
   }
 }
 
@@ -311,7 +316,7 @@ async function scrapeGoogleMaps(
 
     const processPlace = async (link: string) => {
       if (emit.timeUp() || emit.full()) return
-      const placeKey = normalizeMapsPlaceUrl(link)
+      const placeKey = mapsPlaceDedupeKey(link)
       if (visitedPlaceUrls.has(placeKey)) return
       const dp = await newPage(browser, { locale: listLocale })
       try {
@@ -399,7 +404,7 @@ async function scrapeGoogleMaps(
       const fresh: string[] = []
       const seenInCycle = new Set<string>()
       for (const l of links) {
-        const k = normalizeMapsPlaceUrl(l)
+        const k = mapsPlaceDedupeKey(l)
         if (visitedPlaceUrls.has(k) || seenInCycle.has(k)) continue
         seenInCycle.add(k)
         fresh.push(l)
