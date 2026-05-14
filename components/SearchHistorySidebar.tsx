@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, MessageSquare } from 'lucide-react'
+import { Plus, MessageSquare, Trash2 } from 'lucide-react'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 
 const ACTIVE_KEY = 'bp_active_search_id'
@@ -32,6 +32,7 @@ export function SearchHistorySidebar({
   disabled,
   onSelect,
   onNew,
+  onDelete,
   loggedIn,
 }: {
   items: ProspectSearchListItem[]
@@ -40,6 +41,7 @@ export function SearchHistorySidebar({
   disabled?: boolean
   onSelect: (id: string) => void
   onNew: () => void
+  onDelete: (id: string) => void
   loggedIn: boolean
 }) {
   return (
@@ -75,27 +77,44 @@ export function SearchHistorySidebar({
             const label = `${item.categoria} · ${item.ubicacion}`
             return (
               <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(item.id)}
-                  disabled={loading}
-                  className={`w-full text-left rounded-xl px-3 py-2.5 text-sm transition-colors border ${
+                <div
+                  className={`flex items-stretch gap-0.5 rounded-xl border transition-colors ${
                     active
-                      ? 'border-indigo-500/60 bg-indigo-50 dark:bg-indigo-950/40 text-neutral-900 dark:text-neutral-100'
-                      : 'border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300'
+                      ? 'border-indigo-500/60 bg-indigo-50 dark:bg-indigo-950/40'
+                      : 'border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800/80'
                   }`}
                 >
-                  <span className="flex items-start gap-2">
-                    <MessageSquare size={16} className="shrink-0 mt-0.5 text-indigo-500" />
-                    <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 font-medium">{label}</span>
-                      <span className="mt-0.5 block text-[11px] text-neutral-500 dark:text-neutral-500">
-                        {formatWhen(item.updated_at)} · {item.result_count}/{item.cantidad_solicitada}
-                        {item.status === 'running' ? ' · en curso' : ''}
+                  <button
+                    type="button"
+                    onClick={() => onSelect(item.id)}
+                    disabled={loading}
+                    className="min-w-0 flex-1 text-left rounded-l-xl px-3 py-2.5 text-sm text-neutral-700 dark:text-neutral-300 disabled:opacity-50"
+                  >
+                    <span className="flex items-start gap-2">
+                      <MessageSquare size={16} className="shrink-0 mt-0.5 text-indigo-500" />
+                      <span className="min-w-0 flex-1">
+                        <span className="line-clamp-2 font-medium text-neutral-900 dark:text-neutral-100">{label}</span>
+                        <span className="mt-0.5 block text-[11px] text-neutral-500 dark:text-neutral-500">
+                          {formatWhen(item.updated_at)} · {item.result_count}/{item.cantidad_solicitada}
+                          {item.status === 'running' ? ' · en curso' : ''}
+                        </span>
                       </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Eliminar del historial"
+                    title="Eliminar"
+                    disabled={loading || disabled}
+                    onClick={e => {
+                      e.stopPropagation()
+                      onDelete(item.id)
+                    }}
+                    className="shrink-0 self-stretch flex items-center justify-center px-2 rounded-r-xl text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:hover:text-red-400 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </li>
             )
           })}

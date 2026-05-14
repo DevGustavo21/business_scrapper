@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { streamScrapeNegocios } from '@/lib/scraper'
+import type { Negocio } from '@/types/business'
 import { type ScrapeRequest, type ScrapeStreamDone, SCRAPE_MAX_MS } from '@/types/business'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
+
+const MAX_SSE_TEXT = 4500
+
+function clipNegocioForSse(n: Negocio): Negocio {
+  const clip = (s: string) => (s.length > MAX_SSE_TEXT ? `${s.slice(0, MAX_SSE_TEXT)}…` : s)
+  return {
+    ...n,
+    problemasDetectados: clip(n.problemasDetectados),
+    oportunidades: clip(n.oportunidades),
+  }
+}
 
 function sseEncode(event: string, data: unknown): Uint8Array {
   const payload = typeof data === 'string' ? data : JSON.stringify(data)
@@ -36,7 +48,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
       try {
         const { reason, total, requested } = await streamScrapeNegocios(categoria, ubicacion, qty, SCRAPE_MAX_MS, n =>
-          send('negocio', n),
+          send('negocio', clipNegocioForSse(n)),
         )
         const done: ScrapeStreamDone = { reason, total, requested }
         send('done', done)

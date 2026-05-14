@@ -24,13 +24,15 @@ import {
   updateProspectSearchProgress,
   completeProspectSearch,
   markProspectSearchError,
+  deleteProspectSearch,
   formatProspectSearchError,
 } from '@/lib/supabase/prospectSearches'
 import { SCRAPE_MAX_MS, type ScrapeStreamDone, type ContactoEstado, type Negocio, type NegocioFila } from '@/types/business'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 
 function parseSseBlocks(buffer: string, onBlock: (event: string, data: string) => void): string {
-  const parts = buffer.split('\n\n')
+  const normalized = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const parts = normalized.split('\n\n')
   const rest = parts.pop() ?? ''
   for (const block of parts) {
     let ev = 'message'
@@ -146,6 +148,28 @@ export default function Home() {
     setError(null)
   }, [loading])
 
+  const handleDeleteSearch = useCallback(
+    async (id: string) => {
+      if (!user || !isSupabaseConfigured()) return
+      if (!window.confirm('¿Eliminar esta búsqueda del historial? No se puede deshacer.')) return
+      const sb = createBrowserSupabaseClient()
+      const { error: delErr } = await deleteProspectSearch(sb, id)
+      if (delErr) {
+        setError(formatProspectSearchError(delErr.message))
+        return
+      }
+      if (activeSearchIdRef.current === id) {
+        setActiveSearchId(null)
+        writeStoredActiveSearchId(null)
+        setNegocios([])
+        setLastSearch({ categoria: '', ubicacion: '' })
+        setRequestedQty(12)
+      }
+      await refreshHistory()
+    },
+    [user, refreshHistory],
+  )
+
   const handleEstadoChange = useCallback(
     (id: string, estado: ContactoEstado) => {
       setNegocios(prev => {
@@ -218,6 +242,27 @@ export default function Home() {
         await refreshHistory()
       }
 
+      const rowBatch: NegocioFila[] = []
+      let flushScheduled = false
+      const flushPendingRows = () => {
+        if (rowBatch.length === 0) return
+        const batch = rowBatch.splice(0, rowBatch.length)
+        setNegocios(prev => {
+          const next = [...prev, ...batch]
+          negociosRef.current = next
+          return next
+        })
+        if (persistId) scheduleCloudPersist(persistId)
+      }
+      const scheduleFlushRows = () => {
+        if (flushScheduled) return
+        flushScheduled = true
+        queueMicrotask(() => {
+          flushScheduled = false
+          flushPendingRows()
+        })
+      }
+
       try {
         const res = await fetch('/api/scrape/stream', {
           method: 'POST',
@@ -243,6 +288,7 @@ export default function Home() {
           return
         }
         const dec = new TextDecoder()
+
         const onSse = (event: string, data: string) => {
           if (event === 'negocio') {
             try {
@@ -253,12 +299,8 @@ export default function Home() {
                   : `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
               const row: NegocioFila = { ...n, id: rowId }
               streamRows.push(row)
-              setNegocios(prev => {
-                const next = [...prev, row]
-                negociosRef.current = next
-                return next
-              })
-              if (persistId) scheduleCloudPersist(persistId)
+              rowBatch.push(row)
+              scheduleFlushRows()
             } catch {
               /* ignore */
             }
@@ -284,6 +326,7 @@ export default function Home() {
           buf = parseSseBlocks(buf, onSse)
         }
         if (buf.trim()) buf = parseSseBlocks(`${buf}\n\n`, onSse)
+        flushPendingRows()
       } catch (e) {
         const aborted =
           typeof e === 'object' && e !== null && 'name' in e && (e as { name: string }).name === 'AbortError'
@@ -296,6 +339,7 @@ export default function Home() {
       } finally {
         window.clearTimeout(tid)
         flushPersistTimer()
+        flushPendingRows()
         const doneSnapshot = streamMeta.done
         try {
           if (persistId && user && isSupabaseConfigured()) {
@@ -358,6 +402,7 @@ export default function Home() {
           disabled={loading}
           loggedIn={loggedIn}
           onNew={handleNewChat}
+          onDelete={handleDeleteSearch}
           onSelect={id => {
             if (loading) return
             void loadSearchById(id)

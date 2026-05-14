@@ -246,7 +246,8 @@ export type ScrapeEmit = {
   timeUp: () => boolean
   full: () => boolean
   count: () => number
-  tryEmit: (n: Negocio) => boolean
+  /** `dedupeKey` debe ser estable y único por negocio (p. ej. URL normalizada de Maps). */
+  tryEmit: (dedupeKey: string, n: Negocio) => boolean
 }
 
 export function createScrapeEmit(
@@ -260,14 +261,9 @@ export function createScrapeEmit(
     timeUp: () => Date.now() >= deadlineAt,
     full: () => c >= cantidad,
     count: () => c,
-    tryEmit(b: Negocio) {
-      const k = [
-        b.nombre.trim().toLowerCase(),
-        b.telefono.trim(),
-        b.ciudad.trim().toLowerCase(),
-        b.direccion.trim().toLowerCase().slice(0, 64),
-      ].join('|')
-      if (!b.nombre.trim() || seen.has(k)) return false
+    tryEmit(dedupeKey: string, b: Negocio) {
+      const k = dedupeKey.trim().toLowerCase()
+      if (!b.nombre.trim() || !k || seen.has(k)) return false
       seen.add(k)
       c++
       onNegocio(b)
@@ -360,7 +356,7 @@ async function scrapeGoogleMaps(
         }
         if (emit.timeUp()) return
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionMaps)
-        emit.tryEmit({
+        emit.tryEmit(placeKey, {
           nombre: nombre.trim(),
           direccion,
           ciudad,
@@ -493,7 +489,8 @@ async function scrapePaginasAmarillas(
         }
         if (emit.timeUp()) break
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionListado)
-        emit.tryEmit({
+        const paKey = `pa|${nombre}|${telefono}|${sitioWeb}|${direccionListado}`.toLowerCase().slice(0, 400)
+        emit.tryEmit(paKey, {
           nombre,
           direccion,
           ciudad,

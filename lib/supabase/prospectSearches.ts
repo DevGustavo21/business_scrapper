@@ -104,3 +104,8 @@ export async function markProspectSearchError(supabase: SupabaseClient, id: stri
     .eq('id', id)
   return { error: error ? new Error(error.message) : null }
 }
+
+export async function deleteProspectSearch(supabase: SupabaseClient, id: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase.from(TABLE).delete().eq('id', id)
+  return { error: error ? new Error(error.message) : null }
+}
