@@ -3,7 +3,26 @@ import { type Negocio, SCRAPE_MAX_MS } from '@/types/business'
 
 /** SPAs como Maps casi nunca llegan a "networkidle". */
 const NAV_WAIT: 'domcontentloaded' = 'domcontentloaded'
-const NAV_TIMEOUT_MS = 28_000
+const NAV_TIMEOUT_MS = 24_000
+
+/** Auditorías web completas (navegar el sitio): solo las primeras N por búsqueda; el resto va con texto placeholder (mucho más rápido). */
+function auditBudgetForRun(requested: number): number {
+  return Math.max(2, Math.min(8, Math.ceil(requested / 2)))
+}
+
+function placeholderAuditPendiente(): {
+  correo: string
+  problemasDetectados: string
+  oportunidades: string
+} {
+  return {
+    correo: '',
+    problemasDetectados:
+      'Auditoría web omitida en esta extracción masiva; abre el sitio del negocio para revisar UX, rendimiento y SEO manualmente.',
+    oportunidades:
+      'Priorizar propuesta de valor arriba del fold, datos de contacto claros (NAP), velocidad móvil y SEO local (Google Business Profile + schema).',
+  }
+}
 
 const delay = (min: number, max: number) =>
   new Promise(r => setTimeout(r, Math.floor(Math.random() * (max - min + 1)) + min))
@@ -61,15 +80,15 @@ function normalizeMapsPlaceUrl(href: string): string {
 
 async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const hrefs = [...document.querySelectorAll('a[href*="/maps/place/"]')]
-      .map(a => (a as HTMLAnchorElement).href)
+    const nodes = document.querySelectorAll('a[href*="/maps/place/"]')
+    const hrefs = [...nodes].map(a => (a as HTMLAnchorElement).href).filter(Boolean)
     const seen = new Set<string>()
     const out: string[] = []
     for (const h of hrefs) {
       if (seen.has(h)) continue
       seen.add(h)
       out.push(h)
-      if (out.length >= 120) break
+      if (out.length >= 160) break
     }
     return out
   })
@@ -90,12 +109,12 @@ async function extractMapsPlaceTitle(page: Page): Promise<string> {
     'h1',
   ]
   for (const sel of selectors) {
-    const raw = await page.locator(sel).first().innerText({ timeout: 4500 }).catch(() => '')
+    const raw = await page.locator(sel).first().innerText({ timeout: 2800 }).catch(() => '')
     const trimmed = raw?.trim() ?? ''
     if (trimmed && !junk(trimmed)) return trimmed
   }
-  await delay(700, 1200)
-  const raw = await page.locator('h1').first().innerText({ timeout: 5000 }).catch(() => '')
+  await delay(350, 700)
+  const raw = await page.locator('h1').first().innerText({ timeout: 3200 }).catch(() => '')
   const trimmed = raw?.trim() ?? ''
   return junk(trimmed) ? '' : trimmed
 }
@@ -126,8 +145,8 @@ async function auditFromWebsite(
   let page: Page | null = null
   try {
     page = await newPage(browser)
-    const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12_000 })
-    await delay(280, 520)
+    const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8_500 })
+    await delay(120, 260)
     const correo = await extractEmail(page)
     const status = res?.status() ?? 0
     const audit = await page.evaluate(() => {
@@ -222,8 +241,13 @@ export function createScrapeEmit(
     full: () => c >= cantidad,
     count: () => c,
     tryEmit(b: Negocio) {
-      const k = b.nombre.trim().toLowerCase()
-      if (!k || seen.has(k)) return false
+      const k = [
+        b.nombre.trim().toLowerCase(),
+        b.telefono.trim(),
+        b.ciudad.trim().toLowerCase(),
+        b.direccion.trim().toLowerCase().slice(0, 64),
+      ].join('|')
+      if (!b.nombre.trim() || seen.has(k)) return false
       seen.add(k)
       c++
       onNegocio(b)
@@ -243,7 +267,10 @@ async function scrapeGoogleMaps(
   visitedPlaceUrls: Set<string>,
   /** Intentos sin título por URL normalizada; evita bucles infinitos si Maps no hidrata. */
   placeTitleFailCounts: Map<string, number>,
+  auditBudget: { n: number },
 ): Promise<void> {
+  const workers = process.env.VERCEL ? 2 : 3
+
   log('[scraper] Maps: nueva pestaña…')
   const page = await newPage(browser)
   try {
@@ -251,29 +278,40 @@ async function scrapeGoogleMaps(
     log('[scraper] Maps: goto listado…')
     await page.goto(listUrl, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
     if (emit.timeUp()) return
-    await delay(2200, 3600)
+    await delay(1100, 1900)
     if (emit.timeUp()) return
     const feedLoc = page.locator('[role="feed"]').first()
     if ((await page.locator('[role="feed"]').count()) > 0) {
-      const scrolls = Math.min(Math.max(Math.ceil(cantidadSolicitada * 1.2), 10), 22)
+      await feedLoc.waitFor({ state: 'visible', timeout: 12_000 }).catch(() => {})
+      const scrolls = Math.min(Math.max(Math.ceil(cantidadSolicitada * 2.2), 16), 48)
       for (let i = 0; i < scrolls && !emit.timeUp(); i++) {
-        await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 600) }, { timeout: 4000 }).catch(() => {})
-        await delay(400, 750)
+        await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 900) }, { timeout: 3500 }).catch(() => {})
+        await delay(220, 420)
       }
     }
     log('[scraper] Maps: extrayendo enlaces /maps/place/…')
-    const links = await withTimeout(collectMapsPlaceLinks(page), 15_000, [] as string[])
+    const links = await withTimeout(collectMapsPlaceLinks(page), 12_000, [] as string[])
     const freshLinks = links.filter(l => !visitedPlaceUrls.has(normalizeMapsPlaceUrl(l)))
-    log(`[scraper] Maps: ${links.length} enlaces, ${freshLinks.length} aún no visitados`)
-    for (const link of freshLinks) {
-      if (emit.timeUp() || emit.full()) break
+    log(`[scraper] Maps: ${links.length} enlaces, ${freshLinks.length} aún no visitados (workers=${workers})`)
+
+    let nextIdx = 0
+    const auditFallback = {
+      correo: '',
+      problemasDetectados:
+        'Auditoría automática no disponible por tiempo o error; revisar el sitio manualmente.',
+      oportunidades:
+        'Completar revisión de UX/UI, jerarquía visual, copy y SEO on-page con herramientas externas.',
+    }
+
+    const processPlace = async (link: string) => {
+      if (emit.timeUp() || emit.full()) return
       const placeKey = normalizeMapsPlaceUrl(link)
-      if (visitedPlaceUrls.has(placeKey)) continue
+      if (visitedPlaceUrls.has(placeKey)) return
       const dp = await newPage(browser)
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
-        if (emit.timeUp()) break
-        await delay(900, 1600)
+        if (emit.timeUp()) return
+        await delay(450, 850)
         const nombre = await extractMapsPlaceTitle(dp)
         const direccionMaps = await dp.locator('[data-item-id="address"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
@@ -287,21 +325,30 @@ async function scrapeGoogleMaps(
           placeTitleFailCounts.set(placeKey, fails)
           if (fails >= 2) visitedPlaceUrls.add(placeKey)
           log(`[scraper] Maps: sin nombre (intento ${fails}/2) ${placeKey.slice(0, 80)}`)
-          continue
+          return
         }
-        const auditFallback = {
-          correo: '',
-          problemasDetectados:
-            'Auditoría automática no disponible por tiempo o error; revisar el sitio manualmente.',
-          oportunidades:
-            'Completar revisión de UX/UI, jerarquía visual, copy y SEO on-page con herramientas externas.',
+        const sw = sitioWeb.trim()
+        let correo: string
+        let problemasDetectados: string
+        let oportunidades: string
+        if (!sw) {
+          const r = await auditFromWebsite(browser, sitioWeb)
+          correo = r.correo
+          problemasDetectados = r.problemasDetectados
+          oportunidades = r.oportunidades
+        } else if (auditBudget.n > 0) {
+          auditBudget.n--
+          const r = await withTimeout(auditFromWebsite(browser, sitioWeb), 7_500, auditFallback)
+          correo = r.correo
+          problemasDetectados = r.problemasDetectados
+          oportunidades = r.oportunidades
+        } else {
+          const p = placeholderAuditPendiente()
+          correo = p.correo
+          problemasDetectados = p.problemasDetectados
+          oportunidades = p.oportunidades
         }
-        const { correo, problemasDetectados, oportunidades } = await withTimeout(
-          auditFromWebsite(browser, sitioWeb),
-          14_000,
-          auditFallback,
-        )
-        if (emit.timeUp()) break
+        if (emit.timeUp()) return
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionMaps)
         emit.tryEmit({
           nombre: nombre.trim(),
@@ -320,9 +367,21 @@ async function scrapeGoogleMaps(
         log(`[scraper] Maps: error ficha ${placeKey.slice(0, 80)} — ${e instanceof Error ? e.message : String(e)}`)
       } finally {
         await dp.context().close().catch(() => {})
-        await delay(400, 800)
+        await delay(120, 280)
       }
     }
+
+    const runWorker = async () => {
+      while (!emit.timeUp() && !emit.full()) {
+        const i = nextIdx++
+        if (i >= freshLinks.length) return
+        const link = freshLinks[i]
+        await processPlace(link)
+      }
+    }
+
+    const pool = Math.min(workers, Math.max(1, freshLinks.length))
+    await Promise.all(Array.from({ length: pool }, () => runWorker()))
   } finally {
     await page.context().close().catch(() => {})
   }
@@ -336,14 +395,22 @@ async function scrapePaginasAmarillas(
   cantidad: number,
   emit: ScrapeEmit,
   log: (m: string) => void,
+  auditBudget: { n: number },
 ): Promise<void> {
   log('[scraper] Páginas Amarillas: listado…')
   const page = await newPage(browser)
   try {
     await page.goto(`https://www.paginasamarillas.es/search/${encodeURIComponent(categoria)}/all-ma/all-pr/all-is/${encodeURIComponent(ubicacion)}/all-ba/all-pu/1`, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
     if (emit.timeUp()) return
-    await delay(1500, 2600)
+    await delay(900, 1600)
     const listings = await page.$$('article.business-result-content, li.elem')
+    const auditFallback = {
+      correo: '',
+      problemasDetectados:
+        'Auditoría automática no disponible por tiempo o error; revisar el sitio manualmente.',
+      oportunidades:
+        'Completar revisión de UX/UI, jerarquía visual, copy y SEO on-page con herramientas externas.',
+    }
     for (const listing of listings) {
       if (emit.timeUp() || emit.full()) break
       try {
@@ -354,18 +421,27 @@ async function scrapePaginasAmarillas(
         const webEl = await listing.$('a[href^="http"]:not([href*="paginasamarillas"])')
         if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
         if (!nombre) continue
-        const auditFallback = {
-          correo: '',
-          problemasDetectados:
-            'Auditoría automática no disponible por tiempo o error; revisar el sitio manualmente.',
-          oportunidades:
-            'Completar revisión de UX/UI, jerarquía visual, copy y SEO on-page con herramientas externas.',
+        const sw = sitioWeb.trim()
+        let correo: string
+        let problemasDetectados: string
+        let oportunidades: string
+        if (!sw) {
+          const r = await auditFromWebsite(browser, sitioWeb)
+          correo = r.correo
+          problemasDetectados = r.problemasDetectados
+          oportunidades = r.oportunidades
+        } else if (auditBudget.n > 0) {
+          auditBudget.n--
+          const r = await withTimeout(auditFromWebsite(browser, sitioWeb), 7_500, auditFallback)
+          correo = r.correo
+          problemasDetectados = r.problemasDetectados
+          oportunidades = r.oportunidades
+        } else {
+          const p = placeholderAuditPendiente()
+          correo = p.correo
+          problemasDetectados = p.problemasDetectados
+          oportunidades = p.oportunidades
         }
-        const { correo, problemasDetectados, oportunidades } = await withTimeout(
-          auditFromWebsite(browser, sitioWeb),
-          14_000,
-          auditFallback,
-        )
         if (emit.timeUp()) break
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionListado)
         emit.tryEmit({
@@ -381,7 +457,7 @@ async function scrapePaginasAmarillas(
           estado: 'Sin contactar',
         })
       } catch { /* skip */ }
-      await delay(400, 800)
+      await delay(180, 400)
     }
   } finally {
     await page.context().close().catch(() => {})
@@ -459,13 +535,24 @@ export async function streamScrapeNegocios(
   log(`[scraper] Chromium listo (+${Date.now() - tLaunch} ms)`)
 
   try {
+    const auditBudget = { n: auditBudgetForRun(requested) }
     let round = 0
     while (!emit.full() && !emit.timeUp()) {
       round++
       log(`[scraper] ronda ${round} (hasta ${requested}, ${emit.count()} ya guardados)`)
       const before = emit.count()
 
-      await scrapeGoogleMaps(browser, categoria, ubicacion, requested, emit, log, visitedMapPlace, mapsPlaceTitleFails).catch(err => {
+      await scrapeGoogleMaps(
+        browser,
+        categoria,
+        ubicacion,
+        requested,
+        emit,
+        log,
+        visitedMapPlace,
+        mapsPlaceTitleFails,
+        auditBudget,
+      ).catch(err => {
         console.error('[scraper] Google Maps failed:', err instanceof Error ? err.message : err)
       })
       log(`[scraper] Maps → ${emit.count()} acumulado`)
@@ -474,18 +561,20 @@ export async function streamScrapeNegocios(
 
       if (emit.count() < requested) {
         log('[scraper] complemento: Páginas Amarillas (directorio web)')
-        await scrapePaginasAmarillas(browser, categoria, ubicacion, requested - emit.count(), emit, log).catch(err => {
-          console.error('[scraper] Páginas Amarillas failed:', err instanceof Error ? err.message : err)
-        })
+        await scrapePaginasAmarillas(browser, categoria, ubicacion, requested - emit.count(), emit, log, auditBudget).catch(
+          err => {
+            console.error('[scraper] Páginas Amarillas failed:', err instanceof Error ? err.message : err)
+          },
+        )
       }
       log(`[scraper] tras directorio → ${emit.count()}`)
 
       const gained = emit.count() - before
       if (gained === 0) {
         log('[scraper] sin nuevos en esta ronda; pausa antes de repetir…')
-        await delay(3500, 6000)
+        await delay(2000, 3800)
       } else {
-        await delay(800, 1600)
+        await delay(400, 900)
       }
     }
 

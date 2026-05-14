@@ -181,12 +181,16 @@ export default function Home() {
   const handleSearch = useCallback(
     async (categoria: string, ubicacion: string, cantidad: number) => {
       setLoading(true)
+      flushPersistTimer()
       setError(null)
       setSearchCompleteOpen(false)
       setSearchCompleteSummary(null)
       setNegocios([])
       setLastSearch({ categoria, ubicacion })
       setRequestedQty(cantidad)
+
+      /** Filas solo de esta ejecución (evita carrera si otra búsqueda muta `negociosRef` antes del persist). */
+      const streamRows: NegocioFila[] = []
 
       let persistId: string | null = null
       if (user && isSupabaseConfigured()) {
@@ -206,7 +210,7 @@ export default function Home() {
       const clientMaxMs = SCRAPE_MAX_MS + 90_000
       const tid = window.setTimeout(() => ctrl.abort(), clientMaxMs)
       let buf = ''
-      let streamDone: ScrapeStreamDone | null = null
+      const streamMeta: { done: ScrapeStreamDone | null } = { done: null }
 
       const markRowError = async () => {
         if (!persistId || !user || !isSupabaseConfigured()) return
@@ -247,8 +251,10 @@ export default function Home() {
                 typeof crypto !== 'undefined' && 'randomUUID' in crypto
                   ? crypto.randomUUID()
                   : `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+              const row: NegocioFila = { ...n, id: rowId }
+              streamRows.push(row)
               setNegocios(prev => {
-                const next = [...prev, { ...n, id: rowId }]
+                const next = [...prev, row]
                 negociosRef.current = next
                 return next
               })
@@ -258,7 +264,7 @@ export default function Home() {
             }
           } else if (event === 'done') {
             try {
-              streamDone = JSON.parse(data) as ScrapeStreamDone
+              streamMeta.done = JSON.parse(data) as ScrapeStreamDone
             } catch {
               /* ignore */
             }
@@ -290,30 +296,33 @@ export default function Home() {
       } finally {
         window.clearTimeout(tid)
         flushPersistTimer()
-        setLoading(false)
-
-        if (persistId && user && isSupabaseConfigured()) {
-          const sb = createBrowserSupabaseClient()
-          await updateProspectSearchProgress(sb, persistId, negociosRef.current)
-          const snapshot = streamDone as ScrapeStreamDone | null
-          if (snapshot) {
-            await completeProspectSearch(sb, persistId, negociosRef.current, { reason: snapshot.reason })
-          } else {
-            await completeProspectSearch(sb, persistId, negociosRef.current, { reason: 'timeout' })
+        const doneSnapshot = streamMeta.done
+        try {
+          if (persistId && user && isSupabaseConfigured()) {
+            const sb = createBrowserSupabaseClient()
+            await updateProspectSearchProgress(sb, persistId, streamRows)
+            if (doneSnapshot) {
+              await completeProspectSearch(sb, persistId, streamRows, { reason: doneSnapshot.reason })
+            } else {
+              await completeProspectSearch(sb, persistId, streamRows, { reason: 'timeout' })
+            }
+            await refreshHistory()
           }
-          await refreshHistory()
-        }
 
-        const snapshot = streamDone as ScrapeStreamDone | null
-        if (snapshot) {
-          setSearchCompleteSummary({
-            reason: snapshot.reason,
-            total: snapshot.total,
-            requested: snapshot.requested,
-            categoria,
-            ubicacion,
-          })
-          setSearchCompleteOpen(true)
+          if (doneSnapshot) {
+            setSearchCompleteSummary({
+              reason: doneSnapshot.reason,
+              total: doneSnapshot.total,
+              requested: doneSnapshot.requested,
+              categoria,
+              ubicacion,
+            })
+            setSearchCompleteOpen(true)
+          }
+        } catch (e) {
+          console.warn('[search] persist / resumen:', e)
+        } finally {
+          setLoading(false)
         }
       }
     },
