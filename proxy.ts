@@ -23,5 +23,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Incluir `'/'` explícito: el patrón `/((?!…).*)` en Next suele no coincidir con la raíz exacta,
+  // y Supabase con «Site URL» = dominio devuelve `/?code=…` sin pasar por el proxy.
+  matcher: [
+    '/',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

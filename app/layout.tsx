@@ -19,6 +19,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="min-h-screen bg-[--color-background] text-[--color-foreground]"
         suppressHydrationWarning
       >
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "!function(){try{var p=location.pathname;if(p==='/auth/callback'||p.indexOf('/api')===0)return;if(!new URLSearchParams(location.search).get('code'))return;location.replace(location.origin+'/auth/callback'+location.search)}catch(e){}}();",
+          }}
+        />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="bp-theme">
           <OAuthReturnHandler />
           {children}
