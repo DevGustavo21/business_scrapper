@@ -7,7 +7,7 @@ const NAV_TIMEOUT_MS = 24_000
 
 /** Auditorías web completas (navegar el sitio): solo las primeras N por búsqueda; el resto va con texto placeholder (mucho más rápido). */
 function auditBudgetForRun(requested: number): number {
-  return Math.max(2, Math.min(8, Math.ceil(requested / 2)))
+  return Math.max(1, Math.min(4, Math.ceil(requested / 3)))
 }
 
 function placeholderAuditPendiente(): {
@@ -55,10 +55,10 @@ function splitDireccionResultado(raw: string): { direccion: string; ciudad: stri
 // Bloqueo de assets por URL (evita globs complejos en page.route).
 const ASSET_URL = /\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot)(\?|#|$)/i
 
-async function newPage(browser: Browser): Promise<Page> {
+async function newPage(browser: Browser, opts?: { locale?: string }): Promise<Page> {
   const ctx = await browser.newContext({
     userAgent: USER_AGENT,
-    locale: 'es-ES',
+    locale: opts?.locale ?? 'es-ES',
     viewport: { width: 1280, height: 800 },
     extraHTTPHeaders: { 'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8' },
   })
@@ -80,15 +80,22 @@ function normalizeMapsPlaceUrl(href: string): string {
 
 async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const nodes = document.querySelectorAll('a[href*="/maps/place/"]')
-    const hrefs = [...nodes].map(a => (a as HTMLAnchorElement).href).filter(Boolean)
-    const seen = new Set<string>()
     const out: string[] = []
-    for (const h of hrefs) {
-      if (seen.has(h)) continue
+    const seen = new Set<string>()
+    const push = (href: string) => {
+      const h = href.trim()
+      if (!h || seen.has(h)) return
+      if (!/\/maps\/place\//i.test(h)) return
       seen.add(h)
       out.push(h)
-      if (out.length >= 160) break
+      if (out.length >= 220) return
+    }
+    for (const a of document.querySelectorAll('a[href*="/maps/place/"]')) {
+      push((a as HTMLAnchorElement).href)
+    }
+    for (const a of document.querySelectorAll('a[href]')) {
+      const h = (a as HTMLAnchorElement).href
+      if (h.includes('google.') && h.includes('/maps/place/')) push(h)
     }
     return out
   })
@@ -117,6 +124,19 @@ async function extractMapsPlaceTitle(page: Page): Promise<string> {
   const raw = await page.locator('h1').first().innerText({ timeout: 3200 }).catch(() => '')
   const trimmed = raw?.trim() ?? ''
   return junk(trimmed) ? '' : trimmed
+}
+
+/** Maps en inglés suele hidratar mejor resultados en EE.UU. */
+function browserLocaleForUbicacion(ubicacion: string): string {
+  const u = ubicacion.toLowerCase()
+  if (
+    /\b(miami|orlando|tampa|florida|\bfl\b|usa|united states|new york|brooklyn|manhattan|los angeles|san diego|houston|dallas|chicago|phoenix|philadelphia|boston|atlanta|seattle|denver|austin)\b/i.test(
+      u,
+    )
+  ) {
+    return 'en-US'
+  }
+  return 'es-ES'
 }
 
 async function extractEmail(page: Page): Promise<string> {
@@ -269,32 +289,22 @@ async function scrapeGoogleMaps(
   placeTitleFailCounts: Map<string, number>,
   auditBudget: { n: number },
 ): Promise<void> {
-  const workers = process.env.VERCEL ? 2 : 3
+  /** 1 en Vercel reduce bloqueos de Google por muchas pestañas a la vez. */
+  const workersHere = process.env.VERCEL ? 1 : 2
 
   log('[scraper] Maps: nueva pestaña…')
-  const page = await newPage(browser)
+  const listLocale = browserLocaleForUbicacion(ubicacion)
+  const page = await newPage(browser, { locale: listLocale })
   try {
     const listUrl = `https://www.google.com/maps/search/${encodeURIComponent(`${categoria} en ${ubicacion}`)}`
     log('[scraper] Maps: goto listado…')
     await page.goto(listUrl, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
     if (emit.timeUp()) return
-    await delay(1100, 1900)
+    await delay(1400, 2200)
     if (emit.timeUp()) return
-    const feedLoc = page.locator('[role="feed"]').first()
-    if ((await page.locator('[role="feed"]').count()) > 0) {
-      await feedLoc.waitFor({ state: 'visible', timeout: 12_000 }).catch(() => {})
-      const scrolls = Math.min(Math.max(Math.ceil(cantidadSolicitada * 2.2), 16), 48)
-      for (let i = 0; i < scrolls && !emit.timeUp(); i++) {
-        await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 900) }, { timeout: 3500 }).catch(() => {})
-        await delay(220, 420)
-      }
-    }
-    log('[scraper] Maps: extrayendo enlaces /maps/place/…')
-    const links = await withTimeout(collectMapsPlaceLinks(page), 12_000, [] as string[])
-    const freshLinks = links.filter(l => !visitedPlaceUrls.has(normalizeMapsPlaceUrl(l)))
-    log(`[scraper] Maps: ${links.length} enlaces, ${freshLinks.length} aún no visitados (workers=${workers})`)
 
-    let nextIdx = 0
+    const feedLoc = page.locator('[role="feed"]').first()
+
     const auditFallback = {
       correo: '',
       problemasDetectados:
@@ -307,7 +317,7 @@ async function scrapeGoogleMaps(
       if (emit.timeUp() || emit.full()) return
       const placeKey = normalizeMapsPlaceUrl(link)
       if (visitedPlaceUrls.has(placeKey)) return
-      const dp = await newPage(browser)
+      const dp = await newPage(browser, { locale: listLocale })
       try {
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
         if (emit.timeUp()) return
@@ -371,17 +381,56 @@ async function scrapeGoogleMaps(
       }
     }
 
-    const runWorker = async () => {
-      while (!emit.timeUp() && !emit.full()) {
-        const i = nextIdx++
-        if (i >= freshLinks.length) return
-        const link = freshLinks[i]
-        await processPlace(link)
+    let stagnant = 0
+    while (!emit.full() && !emit.timeUp() && stagnant < 12) {
+      const hasFeed = (await page.locator('[role="feed"]').count()) > 0
+      if (hasFeed) {
+        await feedLoc.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
+        const scrollSteps = Math.min(22, Math.max(14, Math.ceil(cantidadSolicitada * 1.8)))
+        for (let s = 0; s < scrollSteps && !emit.timeUp() && !emit.full(); s++) {
+          await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 1200) }, { timeout: 3200 }).catch(() => {})
+          await delay(150, 320)
+        }
+      } else {
+        log('[scraper] Maps: sin panel [role=feed]; scroll con rueda')
+        for (let s = 0; s < 12 && !emit.timeUp(); s++) {
+          await page.mouse.wheel(0, 1100)
+          await delay(160, 340)
+        }
       }
-    }
 
-    const pool = Math.min(workers, Math.max(1, freshLinks.length))
-    await Promise.all(Array.from({ length: pool }, () => runWorker()))
+      const links = await withTimeout(collectMapsPlaceLinks(page), 16_000, [] as string[])
+      const fresh: string[] = []
+      const seenInCycle = new Set<string>()
+      for (const l of links) {
+        const k = normalizeMapsPlaceUrl(l)
+        if (visitedPlaceUrls.has(k) || seenInCycle.has(k)) continue
+        seenInCycle.add(k)
+        fresh.push(l)
+      }
+
+      log(
+        `[scraper] Maps ciclo: crudos=${links.length} nuevos=${fresh.length} emitidos=${emit.count()}/${cantidadSolicitada} stagnant=${stagnant} workers=${workersHere}`,
+      )
+
+      if (fresh.length === 0) {
+        stagnant++
+        await delay(700, 1300)
+        continue
+      }
+      stagnant = 0
+
+      let nextIdx = 0
+      const runWorker = async () => {
+        while (!emit.timeUp() && !emit.full()) {
+          const i = nextIdx++
+          if (i >= fresh.length) return
+          await processPlace(fresh[i])
+        }
+      }
+      const pool = Math.min(workersHere, Math.max(1, fresh.length))
+      await Promise.all(Array.from({ length: pool }, () => runWorker()))
+    }
   } finally {
     await page.context().close().catch(() => {})
   }
