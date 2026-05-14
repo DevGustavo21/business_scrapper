@@ -10,6 +10,23 @@ const nextConfig: NextConfig = {
       './node_modules/playwright-core/lib/**/*',
     ],
   },
+  /** Antes del proxy: envía `/?code=…` al route handler que hace `exchangeCodeForSession` (conserva query). */
+  async redirects() {
+    return [
+      {
+        source: '/',
+        has: [{ type: 'query', key: 'code' }],
+        destination: '/auth/callback',
+        permanent: false,
+      },
+      {
+        source: '/login',
+        has: [{ type: 'query', key: 'code' }],
+        destination: '/auth/callback',
+        permanent: false,
+      },
+    ]
+  },
 }
 
 export default nextConfig

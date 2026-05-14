@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   description: 'Busca, extrae y exporta datos de negocios locales',
 }
 
+/** Evita HTML de `/` cacheado sin el flujo OAuth actual (p. ej. CDN). */
+export const dynamic = 'force-dynamic'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
