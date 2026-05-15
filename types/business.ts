@@ -27,8 +27,15 @@ export interface Negocio {
   estado: ContactoEstado
 }
 
-/** Fila en tabla UI (id estable para estado y persistencia). */
-export type NegocioFila = Negocio & { id: string }
+/** Fila en tabla UI (id estable para estado y persistencia en búsqueda). */
+export type NegocioFila = Negocio & {
+  id: string
+  /** Si existe, id en `client_prospects` (marcado como prospecto desde búsqueda). */
+  prospectRecordId?: string | null
+  esProspecto?: boolean
+  /** Origen del registro en listados de prospectos (solo UI). */
+  prospectSource?: 'manual' | 'search'
+}
 
 export interface ScrapeRequest {
   categoria: string

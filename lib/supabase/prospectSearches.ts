@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { NegocioFila } from '@/types/business'
+import { negocioFilaForSearchJson } from '@/lib/supabase/clientProspects'
 import type { ProspectSearchListItem, ProspectSearchRow, ProspectSearchStatus } from '@/types/prospect-search'
 
 const TABLE = 'prospect_searches'
@@ -70,7 +71,7 @@ export async function updateProspectSearchProgress(
   const { error } = await supabase
     .from(TABLE)
     .update({
-      negocios,
+      negocios: negocios.map(negocioFilaForSearchJson),
       result_count: negocios.length,
       updated_at: new Date().toISOString(),
     })
@@ -87,7 +88,7 @@ export async function completeProspectSearch(
   const { error } = await supabase
     .from(TABLE)
     .update({
-      negocios,
+      negocios: negocios.map(negocioFilaForSearchJson),
       result_count: negocios.length,
       status: finish.status ?? 'completed',
       finish_reason: finish.reason,

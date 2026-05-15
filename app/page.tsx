@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Building2 } from 'lucide-react'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { AuthNav } from '@/components/AuthNav'
+import { AppHeader } from '@/components/AppHeader'
+import { cn } from '@/lib/utils'
 import { SearchPanel } from '@/components/SearchPanel'
 import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
@@ -27,6 +26,14 @@ import {
   deleteProspectSearch,
   formatProspectSearchError,
 } from '@/lib/supabase/prospectSearches'
+import {
+  fetchProspectMarksForSearch,
+  mergeProspectMarksIntoNegocios,
+  insertProspectFromSearch,
+  deleteClientProspectById,
+  updateClientProspectEstado,
+  formatClientProspectError,
+} from '@/lib/supabase/clientProspects'
 import { SCRAPE_MAX_MS, type ScrapeStreamDone, type ContactoEstado, type Negocio, type NegocioFila } from '@/types/business'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 
@@ -77,6 +84,7 @@ export default function Home() {
   const [requestedQty, setRequestedQty] = useState(12)
   const [searchCompleteOpen, setSearchCompleteOpen] = useState(false)
   const [searchCompleteSummary, setSearchCompleteSummary] = useState<SearchCompleteSummary | null>(null)
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false)
 
   useEffect(() => {
     negociosRef.current = negocios
@@ -114,7 +122,10 @@ export default function Home() {
       setError(null)
       setActiveSearchId(id)
       writeStoredActiveSearchId(id)
-      setNegocios(normalizeNegocios(data.negocios))
+      const raw = normalizeNegocios(data.negocios)
+      const { map, error: markErr } = await fetchProspectMarksForSearch(sb, id)
+      if (markErr) console.warn('[prospect marks]', markErr.message)
+      setNegocios(mergeProspectMarksIntoNegocios(raw, map))
       setLastSearch({ categoria: data.categoria, ubicacion: data.ubicacion })
       setRequestedQty(data.cantidad_solicitada)
     },
@@ -146,6 +157,7 @@ export default function Home() {
     setLastSearch({ categoria: '', ubicacion: '' })
     setRequestedQty(12)
     setError(null)
+    setMobileHistoryOpen(false)
   }, [loading])
 
   const handleDeleteSearch = useCallback(
@@ -174,6 +186,10 @@ export default function Home() {
     (id: string, estado: ContactoEstado) => {
       setNegocios(prev => {
         const next = prev.map(r => (r.id === id ? { ...r, estado } : r))
+        const row = next.find(r => r.id === id)
+        if (row?.prospectRecordId && user && isSupabaseConfigured()) {
+          void updateClientProspectEstado(createBrowserSupabaseClient(), row.prospectRecordId, estado)
+        }
         const sid = activeSearchIdRef.current
         if (sid && user && isSupabaseConfigured()) {
           window.setTimeout(() => {
@@ -193,14 +209,50 @@ export default function Home() {
     }
   }
 
-  const scheduleCloudPersist = (persistId: string) => {
+  const scheduleCloudPersist = useCallback((persistId: string) => {
     if (!user || !isSupabaseConfigured()) return
     flushPersistTimer()
     persistTimerRef.current = window.setTimeout(() => {
       persistTimerRef.current = null
       void updateProspectSearchProgress(createBrowserSupabaseClient(), persistId, negociosRef.current)
     }, 800)
-  }
+  }, [user])
+
+  const handleProspectToggle = useCallback(
+    async (row: NegocioFila) => {
+      if (!user || !isSupabaseConfigured()) {
+        setError('Inicia sesión para marcar prospectos.')
+        return
+      }
+      const sid = activeSearchIdRef.current
+      if (!sid) {
+        setError('Activa una búsqueda del historial (o lanza una nueva con sesión iniciada) para usar el corazón.')
+        return
+      }
+      const sb = createBrowserSupabaseClient()
+      if (row.esProspecto && row.prospectRecordId) {
+        const { error: delErr } = await deleteClientProspectById(sb, row.prospectRecordId)
+        if (delErr) {
+          setError(formatClientProspectError(delErr.message))
+          return
+        }
+        setNegocios(prev =>
+          prev.map(r => (r.id === row.id ? { ...r, esProspecto: false, prospectRecordId: null } : r)),
+        )
+      } else {
+        const { id: pid, error: insErr } = await insertProspectFromSearch(sb, user.id, sid, row)
+        if (insErr || !pid) {
+          setError(formatClientProspectError(insErr?.message))
+          return
+        }
+        setNegocios(prev =>
+          prev.map(r => (r.id === row.id ? { ...r, esProspecto: true, prospectRecordId: pid } : r)),
+        )
+      }
+      scheduleCloudPersist(sid)
+    },
+    [user, scheduleCloudPersist],
+  )
 
   const handleSearch = useCallback(
     async (categoria: string, ubicacion: string, cantidad: number) => {
@@ -370,31 +422,28 @@ export default function Home() {
         }
       }
     },
-    [user, refreshHistory],
+    [user, refreshHistory, scheduleCloudPersist],
   )
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-neutral-200 dark:border-neutral-800 bg-[--color-background]/80 backdrop-blur-md">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-              <Building2 size={14} className="text-white" />
-            </div>
-            <span className="font-semibold text-base tracking-tight text-neutral-900 dark:text-neutral-100 truncate">
-              Business Prospector
-            </span>
-          </div>
-          <div className="flex items-center gap-4 shrink-0">
-            <AuthNav />
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        showMobileHistoryTrigger
+        onOpenMobileHistory={() => setMobileHistoryOpen(true)}
+      />
 
-      <div className="flex flex-1 flex-col sm:flex-row min-h-0 max-w-[1600px] mx-auto w-full">
+      {mobileHistoryOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar historial"
+          className="fixed inset-0 z-40 bg-black/50 sm:hidden"
+          onClick={() => setMobileHistoryOpen(false)}
+        />
+      )}
+
+      <div className="flex flex-1 flex-col sm:flex-row min-h-0 max-w-[1600px] mx-auto w-full relative">
         <SearchHistorySidebar
           items={historyItems}
           activeId={activeSearchId}
@@ -406,7 +455,13 @@ export default function Home() {
           onSelect={id => {
             if (loading) return
             void loadSearchById(id)
+            setMobileHistoryOpen(false)
           }}
+          className={cn(
+            'max-sm:fixed max-sm:top-14 max-sm:bottom-0 max-sm:left-0 max-sm:z-50 max-sm:w-[min(92vw,300px)] max-sm:border-r max-sm:border-neutral-200 dark:max-sm:border-neutral-800 max-sm:shadow-2xl max-sm:transition-transform max-sm:duration-300 max-sm:bg-neutral-50 max-sm:dark:bg-neutral-950',
+            mobileHistoryOpen ? 'max-sm:translate-x-0' : 'max-sm:-translate-x-full',
+            'sm:translate-x-0',
+          )}
         />
 
         <main className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
@@ -440,6 +495,11 @@ export default function Home() {
             loading={loading}
             requestedQty={requestedQty}
             onEstadoChange={handleEstadoChange}
+            prospectHeart={
+              loggedIn && activeSearchId
+                ? { enabled: true, disabled: loading, onToggle: handleProspectToggle }
+                : undefined
+            }
           />
         </main>
       </div>

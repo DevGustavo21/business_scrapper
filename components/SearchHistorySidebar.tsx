@@ -1,6 +1,7 @@
 'use client'
 
 import { Plus, MessageSquare, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 
 const ACTIVE_KEY = 'bp_active_search_id'
@@ -34,6 +35,7 @@ export function SearchHistorySidebar({
   onNew,
   onDelete,
   loggedIn,
+  className,
 }: {
   items: ProspectSearchListItem[]
   activeId: string | null
@@ -43,9 +45,15 @@ export function SearchHistorySidebar({
   onNew: () => void
   onDelete: (id: string) => void
   loggedIn: boolean
+  className?: string
 }) {
   return (
-    <aside className="w-full sm:w-72 shrink-0 border-b sm:border-b-0 sm:border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-950/40 flex flex-col min-h-[180px] sm:min-h-0 sm:max-h-[calc(100vh-3.5rem)] sm:sticky sm:top-14">
+    <aside
+      className={cn(
+        'w-full sm:w-72 shrink-0 border-b sm:border-b-0 sm:border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-950/40 flex flex-col min-h-0 sm:max-h-[calc(100vh-3.5rem)] sm:sticky sm:top-14',
+        className,
+      )}
+    >
       <div className="p-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
           Historial

@@ -91,6 +91,33 @@ function mapsPlaceDedupeKey(href: string): string {
   }
 }
 
+/**
+ * Si el panel de la ficha no hidrata el H1, Maps suele llevar el nombre codificado en la ruta
+ * `/maps/place/Nombre+Negocio/...`.
+ */
+function fallbackNombreFromMapsUrl(href: string): string {
+  try {
+    const u = new URL(href)
+    const m = u.pathname.match(/\/maps\/place\/([^/@]+)/i)
+    if (!m?.[1]) return ''
+    let s = m[1].replace(/\+/g, ' ')
+    try {
+      s = decodeURIComponent(s)
+    } catch {
+      /* segmento ya decodificado o caracteres raros */
+    }
+    const t = s.replace(/\s+/g, ' ').trim()
+    return t.length >= 2 ? t : ''
+  } catch {
+    return ''
+  }
+}
+
+/** Auditar sitio web en cada ficha Maps (lento). Por defecto desactivado para cumplir el cupo de resultados. */
+function mapsWantsDeepWebAudit(): boolean {
+  return process.env.SCRAPE_MAPS_WEB_AUDIT === '1'
+}
+
 /** Enlaces a fichas de negocio en el panel de resultados (DOM cambia con frecuencia). */
 async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -127,6 +154,9 @@ async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
     if (document.body) scanRoots.push(document.body)
     for (const root of scanRoots) {
       root.querySelectorAll('a[href]').forEach(a => push((a as HTMLAnchorElement).href))
+    }
+    for (const a of document.querySelectorAll('[role="article"] a[href]')) {
+      push((a as HTMLAnchorElement).href)
     }
     return out
   })
@@ -316,12 +346,12 @@ async function scrapeGoogleMaps(
   placeTitleFailCounts: Map<string, number>,
   auditBudget: { n: number },
 ): Promise<void> {
-  /** 2 pestañas en paralelo acelera el cupo; `SCRAPE_MAPS_WORKERS=1` si Google limita demasiado. */
+  /** 3 pestañas en paralelo por defecto; `SCRAPE_MAPS_WORKERS=1` si Google limita mucho. */
   const workersHere = (() => {
     const raw = process.env.SCRAPE_MAPS_WORKERS?.trim()
-    if (!raw) return 2
+    if (!raw) return 3
     const n = parseInt(raw, 10)
-    return Number.isFinite(n) ? Math.min(3, Math.max(1, n)) : 2
+    return Number.isFinite(n) ? Math.min(4, Math.max(1, n)) : 3
   })()
 
   log('[scraper] Maps: nueva pestaña…')
@@ -351,10 +381,12 @@ async function scrapeGoogleMaps(
       if (visitedPlaceUrls.has(placeKey)) return
       const dp = await newPage(browser, { locale: listLocale })
       try {
-        await dp.goto(link, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
+        const placeGotoMs = process.env.VERCEL ? 18_000 : 22_000
+        await dp.goto(link, { waitUntil: NAV_WAIT, timeout: placeGotoMs })
         if (emit.timeUp()) return
-        await delay(process.env.VERCEL ? 650 : 450, process.env.VERCEL ? 1100 : 850)
-        const nombre = await extractMapsPlaceTitle(dp)
+        await delay(process.env.VERCEL ? 550 : 400, process.env.VERCEL ? 900 : 750)
+        let nombre = (await extractMapsPlaceTitle(dp)).trim()
+        if (!nombre) nombre = fallbackNombreFromMapsUrl(link)
         const direccionMaps = await dp.locator('[data-item-id="address"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
         const telefono = await dp.locator('[data-item-id^="phone"]').innerText()
@@ -373,18 +405,25 @@ async function scrapeGoogleMaps(
         let correo: string
         let problemasDetectados: string
         let oportunidades: string
-        if (!sw) {
-          const r = await auditFromWebsite(browser, sitioWeb)
-          correo = r.correo
-          problemasDetectados = r.problemasDetectados
-          oportunidades = r.oportunidades
-        } else if (auditBudget.n > 0) {
-          auditBudget.n--
-          const auditMs = process.env.VERCEL ? 5_200 : 7_500
-          const r = await withTimeout(auditFromWebsite(browser, sitioWeb), auditMs, auditFallback)
-          correo = r.correo
-          problemasDetectados = r.problemasDetectados
-          oportunidades = r.oportunidades
+        if (mapsWantsDeepWebAudit()) {
+          if (!sw) {
+            const r = await auditFromWebsite(browser, sitioWeb)
+            correo = r.correo
+            problemasDetectados = r.problemasDetectados
+            oportunidades = r.oportunidades
+          } else if (auditBudget.n > 0) {
+            auditBudget.n--
+            const auditMs = process.env.VERCEL ? 4_800 : 6_500
+            const r = await withTimeout(auditFromWebsite(browser, sitioWeb), auditMs, auditFallback)
+            correo = r.correo
+            problemasDetectados = r.problemasDetectados
+            oportunidades = r.oportunidades
+          } else {
+            const p = placeholderAuditPendiente()
+            correo = p.correo
+            problemasDetectados = p.problemasDetectados
+            oportunidades = p.oportunidades
+          }
         } else {
           const p = placeholderAuditPendiente()
           correo = p.correo
@@ -393,7 +432,7 @@ async function scrapeGoogleMaps(
         }
         if (emit.timeUp()) return
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionMaps)
-        emit.tryEmit(placeKey, {
+        const emitted = emit.tryEmit(placeKey, {
           nombre: nombre.trim(),
           direccion,
           ciudad,
@@ -405,7 +444,7 @@ async function scrapeGoogleMaps(
           oportunidades,
           estado: 'Sin contactar',
         })
-        visitedPlaceUrls.add(placeKey)
+        if (emitted) visitedPlaceUrls.add(placeKey)
       } catch (e) {
         log(`[scraper] Maps: error ficha ${placeKey.slice(0, 80)} — ${e instanceof Error ? e.message : String(e)}`)
       } finally {
@@ -478,6 +517,11 @@ async function scrapeGoogleMaps(
   }
 }
 
+/** Auditar web en Páginas Amarillas (lento). Igual que Maps, desactivado por defecto. */
+function paWantsDeepWebAudit(): boolean {
+  return process.env.SCRAPE_PA_WEB_AUDIT === '1'
+}
+
 // ── Source 2: directorio web (Páginas Amarillas) ─────────────────────────────
 async function scrapePaginasAmarillas(
   browser: Browser,
@@ -516,17 +560,24 @@ async function scrapePaginasAmarillas(
         let correo: string
         let problemasDetectados: string
         let oportunidades: string
-        if (!sw) {
-          const r = await auditFromWebsite(browser, sitioWeb)
-          correo = r.correo
-          problemasDetectados = r.problemasDetectados
-          oportunidades = r.oportunidades
-        } else if (auditBudget.n > 0) {
-          auditBudget.n--
-          const r = await withTimeout(auditFromWebsite(browser, sitioWeb), 7_500, auditFallback)
-          correo = r.correo
-          problemasDetectados = r.problemasDetectados
-          oportunidades = r.oportunidades
+        if (paWantsDeepWebAudit()) {
+          if (!sw) {
+            const r = await auditFromWebsite(browser, sitioWeb)
+            correo = r.correo
+            problemasDetectados = r.problemasDetectados
+            oportunidades = r.oportunidades
+          } else if (auditBudget.n > 0) {
+            auditBudget.n--
+            const r = await withTimeout(auditFromWebsite(browser, sitioWeb), 7_500, auditFallback)
+            correo = r.correo
+            problemasDetectados = r.problemasDetectados
+            oportunidades = r.oportunidades
+          } else {
+            const p = placeholderAuditPendiente()
+            correo = p.correo
+            problemasDetectados = p.problemasDetectados
+            oportunidades = p.oportunidades
+          }
         } else {
           const p = placeholderAuditPendiente()
           correo = p.correo
@@ -625,6 +676,11 @@ export async function streamScrapeNegocios(
     throw e
   }
   log(`[scraper] Chromium listo (+${Date.now() - tLaunch} ms)`)
+  if (!mapsWantsDeepWebAudit()) {
+    log(
+      '[scraper] Modo rápido: sin auditoría web por negocio en Maps (ni PA). Más filas antes del timeout. Para auditar sitios: SCRAPE_MAPS_WEB_AUDIT=1 y/o SCRAPE_PA_WEB_AUDIT=1.',
+    )
+  }
 
   try {
     const auditBudget = { n: auditBudgetForRun(requested) }
