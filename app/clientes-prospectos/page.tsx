@@ -51,13 +51,18 @@ export default function ClientesProspectosPage() {
     prospectSource: r.source,
   }))
 
-  const handleRemove = async (row: NegocioFila) => {
-    if (!window.confirm('¿Quitar este negocio de clientes prospectos?')) return
+  const deleteProspectById = async (id: string) => {
     if (!user || !isSupabaseConfigured()) return
     const sb = createBrowserSupabaseClient()
-    const { error: dErr } = await deleteClientProspectById(sb, row.id)
+    const { error: dErr } = await deleteClientProspectById(sb, id)
     if (dErr) setError(formatClientProspectError(dErr.message))
     else await load()
+  }
+
+  const requestDeleteProspect = (row: NegocioFila) => {
+    if (!window.confirm(`¿Eliminar por completo «${row.nombre}» de clientes prospectos? Esta acción no se puede deshacer.`))
+      return
+    void deleteProspectById(row.id)
   }
 
   const handleEstadoChange = async (id: string, estado: ContactoEstado) => {
@@ -83,7 +88,7 @@ export default function ClientesProspectosPage() {
             <Link href="/agregar-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
               Agregar prospectos
             </Link>
-            . Pulsa el corazón para quitar de esta lista.
+            . Usa la papelera para eliminar un registro por completo.
           </p>
         </div>
 
@@ -108,13 +113,13 @@ export default function ClientesProspectosPage() {
           onEstadoChange={handleEstadoChange}
           summaryMode="list"
           showOrigenColumn
-          prospectHeart={
+          deleteRow={
             loggedIn
               ? {
                   enabled: true,
                   disabled: loading,
-                  removeOnly: true,
-                  onToggle: row => void handleRemove(row),
+                  title: 'Eliminar este prospecto de forma permanente',
+                  onDelete: requestDeleteProspect,
                 }
               : undefined
           }
@@ -122,7 +127,7 @@ export default function ClientesProspectosPage() {
 
         {!loading && loggedIn && rows.length === 0 && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Aún no hay prospectos. Márcalos con el corazón en los resultados de una búsqueda o créalos en Agregar prospectos.
+            Aún no hay prospectos. Márcalos con el corazón en los resultados de una búsqueda o créalos en Agregar prospectos. Para borrar uno de esta lista usa la papelera.
           </p>
         )}
       </main>

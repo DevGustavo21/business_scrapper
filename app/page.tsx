@@ -254,6 +254,37 @@ export default function Home() {
     [user, scheduleCloudPersist],
   )
 
+  const handleDeleteNegocioRow = useCallback(
+    (row: NegocioFila) => {
+      if (
+        !window.confirm(
+          '¿Eliminar esta fila de los resultados? Se quitará de la búsqueda guardada. Si estaba como prospecto, también se borrará de Clientes prospectos.',
+        )
+      )
+        return
+      flushPersistTimer()
+      const sid = activeSearchIdRef.current
+      void (async () => {
+        if (row.prospectRecordId && user && isSupabaseConfigured()) {
+          const { error: delErr } = await deleteClientProspectById(createBrowserSupabaseClient(), row.prospectRecordId)
+          if (delErr) {
+            setError(formatClientProspectError(delErr.message))
+            return
+          }
+        }
+        setNegocios(prev => {
+          const next = prev.filter(r => r.id !== row.id)
+          negociosRef.current = next
+          if (sid && user && isSupabaseConfigured()) {
+            void updateProspectSearchProgress(createBrowserSupabaseClient(), sid, next)
+          }
+          return next
+        })
+      })()
+    },
+    [user],
+  )
+
   const handleSearch = useCallback(
     async (categoria: string, ubicacion: string, cantidad: number) => {
       setLoading(true)
@@ -498,6 +529,16 @@ export default function Home() {
             prospectHeart={
               loggedIn && activeSearchId
                 ? { enabled: true, disabled: loading, onToggle: handleProspectToggle }
+                : undefined
+            }
+            deleteRow={
+              loggedIn && activeSearchId
+                ? {
+                    enabled: true,
+                    disabled: loading,
+                    title: 'Eliminar esta fila de la búsqueda',
+                    onDelete: handleDeleteNegocioRow,
+                  }
                 : undefined
             }
           />

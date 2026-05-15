@@ -1,10 +1,10 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink, Heart } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink, Heart, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CONTACTO_ESTADOS, type ContactoEstado, type NegocioFila } from '@/types/business'
 
-type ColKey = '#' | 'origen' | keyof NegocioFila | 'prospecto'
+type ColKey = '#' | 'origen' | keyof NegocioFila | 'prospecto' | 'eliminar'
 type Dir = 'asc' | 'desc'
 
 const MID_COLS: { key: keyof NegocioFila; label: string }[] = [
@@ -54,6 +54,7 @@ export function ResultsTable({
   onEstadoChange,
   showOrigenColumn,
   prospectHeart,
+  deleteRow,
   summaryMode = 'scraped',
 }: {
   negocios: NegocioFila[]
@@ -70,6 +71,14 @@ export function ResultsTable({
     removeOnly?: boolean
     onToggle: (row: NegocioFila) => void
   }
+  /** Eliminar la fila por completo (papelera). La confirmación la hace el padre. */
+  deleteRow?: {
+    enabled: boolean
+    disabled?: boolean
+    label?: string
+    title?: string
+    onDelete: (row: NegocioFila) => void
+  }
   /** `list`: textos para listados CRUD/prospectos sin copy de scraping. */
   summaryMode?: 'scraped' | 'list'
 }) {
@@ -79,12 +88,14 @@ export function ResultsTable({
     for (const c of MID_COLS) out.push({ key: c.key, label: c.label })
     if (prospectHeart?.enabled) out.push({ key: 'prospecto', label: '¿Prospecto?' })
     out.push({ key: 'estado', label: 'Estado' })
+    if (deleteRow?.enabled) out.push({ key: 'eliminar', label: deleteRow.label ?? 'Eliminar' })
     return out
-  }, [showOrigenColumn, prospectHeart?.enabled])
+  }, [showOrigenColumn, prospectHeart?.enabled, deleteRow?.enabled, deleteRow?.label])
 
   const [sortKey, setSortKey] = useState<ColKey>('#')
   const [sortDir, setSortDir] = useState<Dir>('asc')
   const handleSort = (k: ColKey) => {
+    if (k === 'eliminar') return
     if (k === 'prospecto' && !prospectHeart?.enabled) return
     if (k === 'origen' && !showOrigenColumn) return
     if (sortKey === k) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -172,12 +183,16 @@ export function ResultsTable({
               {cols.map(col => (
                 <th
                   key={String(col.key)}
-                  onClick={() => handleSort(col.key)}
-                  className="px-3 py-3 text-left font-semibold text-neutral-600 dark:text-neutral-400 cursor-pointer select-none whitespace-nowrap hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors align-bottom"
+                  onClick={col.key === 'eliminar' ? undefined : () => handleSort(col.key)}
+                  className={
+                    col.key === 'eliminar'
+                      ? 'px-3 py-3 text-left font-semibold text-neutral-600 dark:text-neutral-400 select-none whitespace-nowrap align-bottom'
+                      : 'px-3 py-3 text-left font-semibold text-neutral-600 dark:text-neutral-400 cursor-pointer select-none whitespace-nowrap hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors align-bottom'
+                  }
                 >
                   <span className="flex items-center gap-1">
                     {col.label}
-                    <Icon col={col.key} />
+                    {col.key !== 'eliminar' && <Icon col={col.key} />}
                   </span>
                 </th>
               ))}
@@ -253,6 +268,24 @@ export function ResultsTable({
                             </option>
                           ))}
                         </select>
+                      </td>
+                    )
+                  if (col.key === 'eliminar' && deleteRow?.enabled)
+                    return (
+                      <td key="eliminar" className="px-3 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          disabled={deleteRow.disabled}
+                          title={deleteRow.title ?? 'Eliminar esta fila por completo'}
+                          aria-label="Eliminar fila"
+                          onClick={() => deleteRow.onDelete(n)}
+                          className={cn(
+                            'p-2 rounded-xl transition-colors text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30',
+                            deleteRow.disabled && 'opacity-40 cursor-not-allowed',
+                          )}
+                        >
+                          <Trash2 size={20} />
+                        </button>
                       </td>
                     )
                   const k = col.key as keyof NegocioFila

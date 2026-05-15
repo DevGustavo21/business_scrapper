@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AppHeader } from '@/components/AppHeader'
 import { ResultsTable } from '@/components/ResultsTable'
+import { SimpleInfoModal } from '@/components/SimpleInfoModal'
 import { Toast } from '@/components/Toast'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
@@ -40,6 +41,7 @@ export default function AgregarProspectosPage() {
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [successModal, setSuccessModal] = useState<{ kind: 'created' | 'updated'; nombre: string } | null>(null)
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
@@ -93,22 +95,28 @@ export default function AgregarProspectosPage() {
     }
     setSaving(true)
     setError(null)
+    const nombreHecho = form.nombre.trim()
     const sb = createBrowserSupabaseClient()
     if (editingId) {
       const { error: uErr } = await updateManualClientProspect(sb, editingId, form)
       if (uErr) setError(formatClientProspectError(uErr.message))
-      else resetForm()
+      else {
+        resetForm()
+        setSuccessModal({ kind: 'updated', nombre: nombreHecho })
+      }
     } else {
       const { error: iErr } = await insertManualClientProspect(sb, user.id, form)
       if (iErr) setError(formatClientProspectError(iErr.message))
-      else resetForm()
+      else {
+        resetForm()
+        setSuccessModal({ kind: 'created', nombre: nombreHecho })
+      }
     }
     setSaving(false)
     await load()
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Eliminar este prospecto manual?')) return
     if (!user || !isSupabaseConfigured()) return
     const sb = createBrowserSupabaseClient()
     const { error: dErr } = await deleteClientProspectById(sb, id)
@@ -117,6 +125,11 @@ export default function AgregarProspectosPage() {
       if (editingId === id) resetForm()
       await load()
     }
+  }
+
+  const requestDeleteRow = (row: NegocioFila) => {
+    if (!window.confirm(`¿Eliminar por completo el prospecto «${row.nombre}»? Esta acción no se puede deshacer.`)) return
+    void handleDelete(row.id)
   }
 
   const negocios: NegocioFila[] = rows.map(r => ({
@@ -304,20 +317,20 @@ export default function AgregarProspectosPage() {
         <div>
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">Prospectos manuales</h2>
           <p className="text-xs text-neutral-500 mb-3">
-            Pulsa el corazón para eliminar de tu lista de prospectos (y de esta tabla).
+            Usa la papelera para borrar el registro por completo de la base de datos.
           </p>
           <ResultsTable
             negocios={negocios}
             loading={loading}
             onEstadoChange={handleEstadoChange}
             summaryMode="list"
-            prospectHeart={
+            deleteRow={
               loggedIn
                 ? {
                     enabled: true,
                     disabled: loading,
-                    removeOnly: true,
-                    onToggle: row => void handleDelete(row.id),
+                    title: 'Eliminar este prospecto de forma permanente',
+                    onDelete: requestDeleteRow,
                   }
                 : undefined
             }
@@ -345,6 +358,18 @@ export default function AgregarProspectosPage() {
       </main>
 
       {error && <Toast message={error} onClose={() => setError(null)} />}
+      <SimpleInfoModal
+        open={successModal !== null}
+        title={successModal?.kind === 'created' ? 'Prospecto creado' : 'Prospecto actualizado'}
+        message={
+          successModal
+            ? successModal.kind === 'created'
+              ? `Se guardó correctamente «${successModal.nombre}». Ya aparece en esta tabla y en Clientes prospectos.`
+              : `Los cambios de «${successModal.nombre}» se guardaron correctamente.`
+            : ''
+        }
+        onClose={() => setSuccessModal(null)}
+      />
     </div>
   )
 }
