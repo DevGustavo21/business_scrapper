@@ -131,6 +131,8 @@ async function dismissMapsOverlays(page: Page, log: (m: string) => void): Promis
     '[aria-label="Aceptar todo"]',
     '[aria-label="Accept all"]',
     'form[action*="consent"] button',
+    'button:has-text("Aceptar")',
+    'div[role="dialog"] button:has-text("Aceptar todo")',
   ]
   for (const sel of candidates) {
     const loc = page.locator(sel).first()
@@ -147,6 +149,48 @@ async function dismissMapsOverlays(page: Page, log: (m: string) => void): Promis
 
 type FeedPlaceHint = { href: string; hint: string }
 
+const MAPS_LITE_PROBLEMAS =
+  'Extracción rápida desde el listado de Maps: la ficha no se abrió en el servidor (bloqueo, consentimiento o timeout). Pueden faltar teléfono y web exactos.'
+const MAPS_LITE_OPORTUNIDADES =
+  'Completar NAP en Google Business Profile y validar teléfono y sitio web abriendo la ficha en Maps manualmente.'
+
+function tryEmitLiteFromMapsFeed(
+  emit: ScrapeEmit,
+  visitedPlaceUrls: Set<string>,
+  feedHints: FeedPlaceHint[],
+  log: (m: string) => void,
+): number {
+  let added = 0
+  for (const { href, hint } of feedHints) {
+    if (emit.timeUp() || emit.full()) break
+    const placeKey = mapsPlaceDedupeKey(href)
+    if (visitedPlaceUrls.has(placeKey)) continue
+    const nombre = cleanFeedHintName(hint)
+    if (!nombre) continue
+    const rawAddr = direccionLiteFromHint(hint)
+    const { direccion, ciudad, pais } = splitDireccionResultado(rawAddr)
+    const p = placeholderAuditPendiente()
+    const ok = emit.tryEmit(placeKey, {
+      nombre,
+      direccion,
+      ciudad,
+      pais,
+      telefono: '',
+      correo: '',
+      sitioWeb: '',
+      problemasDetectados: `${MAPS_LITE_PROBLEMAS} ${p.problemasDetectados}`.trim(),
+      oportunidades: `${MAPS_LITE_OPORTUNIDADES} ${p.oportunidades}`.trim(),
+      estado: 'Sin contactar',
+    })
+    if (ok) {
+      visitedPlaceUrls.add(placeKey)
+      added++
+    }
+  }
+  if (added > 0) log(`[scraper] Maps: filas desde listado sin abrir ficha=${added}`)
+  return added
+}
+
 function cleanFeedHintName(raw: string): string {
   const t = raw.replace(/\s+/g, ' ').trim()
   if (t.length < 2 || /^google maps$/i.test(t)) return ''
@@ -154,6 +198,38 @@ function cleanFeedHintName(raw: string): string {
   if (head.length < 2) return ''
   if (/^resultados de búsqueda$/i.test(head)) return ''
   return head.slice(0, 180)
+}
+
+/** Fragmento de dirección dentro del aria-label / tarjeta del listado (separadores ·). */
+function direccionLiteFromHint(hint: string): string {
+  const parts = hint.split('·').map(s => s.trim()).filter(Boolean)
+  for (const p of parts) {
+    if (p.length < 6) continue
+    if (/^\$+$/.test(p)) continue
+    if (/^\d+[,.]\d+\s*\(/.test(p)) continue
+    if (/^\d+\s*(?:reseñas|reviews)$/i.test(p)) continue
+    if (/^(restaurant|cafe|bar|hotel|store|comida|restaurante)$/i.test(p) && !p.includes(',')) continue
+    if (p.includes(',') || /\d/.test(p)) return p
+  }
+  const last = parts[parts.length - 1] ?? ''
+  if (last.length >= 10 && /\s/.test(last)) return last
+  return ''
+}
+
+/** Parámetros en URL de búsqueda Maps (`?gl=…`) para resultados locales fuera de España. */
+function mapsSearchExtraParams(ubicacion: string): string {
+  const u = ubicacion.toLowerCase()
+  if (/nicaragua|managua|granada|le[oó]n|matagalpa|chinandega|estel[ií]/i.test(u))
+    return '?gl=ni&hl=es-419'
+  if (/costa\s*rica|san\s*jos[eé]|escaz[uú]|cartago|heredia|alajuela|lim[oó]n|guanacaste|puntarenas/i.test(u))
+    return '?gl=cr&hl=es-419'
+  if (/guatemala|guate|quetzaltenango|antigua\s+guatemala/i.test(u)) return '?gl=gt&hl=es-419'
+  if (/honduras|tegucigalpa|san\s+pedro\s+sula/i.test(u)) return '?gl=hn&hl=es-419'
+  if (/el\s+salvador|san\s+salvador/i.test(u)) return '?gl=sv&hl=es-419'
+  if (/panam[aá]|ciudad\s+de\s+panam/i.test(u)) return '?gl=pa&hl=es-419'
+  if (/m[eé]xico|mexico|cdmx|guadalajara|monterrey|canc[uú]n|tijuana|puebla/i.test(u)) return '?gl=mx&hl=es-419'
+  if (/colombia|bogot[aá]|medell[ií]n|cali|cartagena/i.test(u)) return '?gl=co&hl=es-419'
+  return ''
 }
 
 /** Pistas de nombre desde tarjetas del feed (la ficha a veces no hidrata el H1 a tiempo). */
@@ -287,6 +363,13 @@ function browserLocaleForUbicacion(ubicacion: string): string {
   ) {
     return 'en-US'
   }
+  if (
+    /\b(nicaragua|managua|costa rica|honduras|guatemala|el salvador|panam|belice|belize|m[eé]xico|mexico|colombia|ecuador|per[uú]|chile|argentina|uruguay|paraguay|bolivia|venezuela)\b/i.test(
+      u,
+    )
+  ) {
+    return 'es-419'
+  }
   return 'es-ES'
 }
 
@@ -397,6 +480,8 @@ export type ScrapeEmit = {
   timeUp: () => boolean
   full: () => boolean
   count: () => number
+  /** Amplía el plazo (p. ej. fallback Places tras Maps). */
+  extendDeadline: (extraMs: number) => void
   /** `dedupeKey` debe ser estable y único por negocio (p. ej. URL normalizada de Maps). */
   tryEmit: (dedupeKey: string, n: Negocio) => boolean
 }
@@ -408,10 +493,15 @@ export function createScrapeEmit(
 ): ScrapeEmit {
   const seen = new Set<string>()
   let c = 0
+  let deadline = deadlineAt
   return {
-    timeUp: () => Date.now() >= deadlineAt,
+    timeUp: () => Date.now() >= deadline,
     full: () => c >= cantidad,
     count: () => c,
+    extendDeadline(extraMs: number) {
+      const add = Math.max(0, Math.floor(extraMs))
+      deadline = Math.max(deadline, Date.now() + add)
+    },
     tryEmit(dedupeKey: string, b: Negocio) {
       const k = dedupeKey.trim().toLowerCase()
       if (!b.nombre.trim() || !k || seen.has(k)) return false
@@ -448,7 +538,8 @@ async function scrapeGoogleMaps(
   const listLocale = browserLocaleForUbicacion(ubicacion)
   const page = await newPage(browser, { locale: listLocale })
   try {
-    const listUrl = `https://www.google.com/maps/search/${encodeURIComponent(`${categoria} en ${ubicacion}`)}`
+    const mapExtra = mapsSearchExtraParams(ubicacion)
+    const listUrl = `https://www.google.com/maps/search/${encodeURIComponent(`${categoria} en ${ubicacion}`)}${mapExtra}`
     log('[scraper] Maps: goto listado…')
     await page.goto(listUrl, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS })
     if (emit.timeUp()) return
@@ -461,7 +552,10 @@ async function scrapeGoogleMaps(
     const feedLoc = page.locator('[role="feed"]').first()
     const hintByPlaceKey = new Map<string, string>()
     let didAltListUrl = false
-    const listUrlAlt = `https://www.google.com/maps/search/${encodeURIComponent(`${categoria} ${ubicacion}`)}?hl=${listLocale.startsWith('en') ? 'en' : 'es'}`
+    const listUrlAltBase = `https://www.google.com/maps/search/${encodeURIComponent(`${categoria} ${ubicacion}`)}`
+    const listUrlAlt = mapExtra
+      ? `${listUrlAltBase}${mapExtra}`
+      : `${listUrlAltBase}?hl=${listLocale.startsWith('en') ? 'en' : 'es-ES'}`
 
     const auditFallback = {
       correo: '',
@@ -582,6 +676,8 @@ async function scrapeGoogleMaps(
         const cleaned = cleanFeedHintName(hint)
         if (cleaned && !hintByPlaceKey.has(k)) hintByPlaceKey.set(k, cleaned)
       }
+      tryEmitLiteFromMapsFeed(emit, visitedPlaceUrls, feedHints, log)
+
       const linkSet = new Set<string>(links)
       for (const { href } of feedHints) {
         if (href.trim()) linkSet.add(href.trim())
@@ -733,6 +829,95 @@ async function scrapePaginasAmarillas(
   }
 }
 
+/** Fallback cuando el scraping de Maps no devuelve filas (p. ej. anti-bot en Vercel). Requiere clave solo en servidor. */
+async function scrapeGooglePlacesTextSearchApi(
+  categoria: string,
+  ubicacion: string,
+  emit: ScrapeEmit,
+  log: (m: string) => void,
+): Promise<void> {
+  const key =
+    process.env.GOOGLE_PLACES_API_KEY?.trim() ||
+    process.env.GOOGLE_MAPS_API_KEY?.trim()
+  if (!key) return
+
+  const query = `${categoria} ${ubicacion}`.replace(/\s+/g, ' ').trim()
+  if (!query) return
+
+  const before = emit.count()
+  let nextPageToken: string | undefined
+
+  for (let pageIdx = 0; pageIdx < 5 && !emit.full() && !emit.timeUp(); pageIdx++) {
+    const u = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
+    u.searchParams.set('query', query)
+    u.searchParams.set('key', key)
+    if (nextPageToken) u.searchParams.set('pagetoken', nextPageToken)
+
+    let res: Response
+    try {
+      res = await fetch(u.toString(), { signal: AbortSignal.timeout(28_000) })
+    } catch (e) {
+      log(`[scraper] Places API: red ${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
+    if (!res.ok) {
+      log(`[scraper] Places API HTTP ${res.status}`)
+      return
+    }
+    const data = (await res.json()) as {
+      status: string
+      error_message?: string
+      results?: { place_id?: string; name?: string; formatted_address?: string }[]
+      next_page_token?: string
+    }
+
+    if (data.status === 'REQUEST_DENIED' || data.status === 'INVALID_REQUEST') {
+      log(`[scraper] Places API ${data.status}: ${data.error_message ?? '(sin mensaje)'}`)
+      return
+    }
+    if (data.status === 'OVER_QUERY_LIMIT') {
+      await delay(2200, 2800)
+      continue
+    }
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      log(`[scraper] Places API status=${data.status}`)
+      return
+    }
+
+    const rows = data.results ?? []
+    for (const r of rows) {
+      if (emit.timeUp() || emit.full()) return
+      const pid = (r.place_id ?? '').trim()
+      const name = (r.name ?? '').trim()
+      if (!pid || !name) continue
+      const dedupe = `gplaces|${pid}`
+      const addr = (r.formatted_address ?? '').trim()
+      const { direccion, ciudad, pais } = splitDireccionResultado(addr)
+      const ph = placeholderAuditPendiente()
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(pid)}`
+      emit.tryEmit(dedupe, {
+        nombre: name,
+        direccion,
+        ciudad,
+        pais,
+        telefono: '',
+        correo: '',
+        sitioWeb: mapsLink,
+        problemasDetectados: `Origen: Google Places (API). ${ph.problemasDetectados}`.trim(),
+        oportunidades: ph.oportunidades,
+        estado: 'Sin contactar',
+      })
+    }
+
+    nextPageToken = data.next_page_token?.trim()
+    if (!nextPageToken || rows.length === 0) break
+    await delay(2100, 2600)
+  }
+
+  const gained = emit.count() - before
+  if (gained > 0) log(`[scraper] Places API: +${gained} negocios (total ${emit.count()})`)
+}
+
 // ── Browser + orquestación ──────────────────────────────────────────────────
 
 async function launchChromium(): Promise<Browser> {
@@ -831,7 +1016,7 @@ export async function streamScrapeNegocios(
       })
       log(`[scraper] Maps → ${emit.count()} acumulado`)
 
-      if (emit.full() || emit.timeUp()) break
+      if (emit.full()) break
 
       if (emit.count() < requested) {
         log('[scraper] complemento: Páginas Amarillas (directorio web)')
@@ -850,6 +1035,18 @@ export async function streamScrapeNegocios(
       } else {
         await delay(400, 900)
       }
+    }
+
+    const hasPlacesKey = !!(
+      process.env.GOOGLE_PLACES_API_KEY?.trim() ||
+      process.env.GOOGLE_MAPS_API_KEY?.trim()
+    )
+    if (emit.count() < requested && hasPlacesKey) {
+      emit.extendDeadline(70_000)
+      log('[scraper] fallback final: Google Places API (hasta completar cupo o agotar páginas)')
+      await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
+        console.error('[scraper] Places API failed:', err instanceof Error ? err.message : err)
+      })
     }
 
     const total = emit.count()
