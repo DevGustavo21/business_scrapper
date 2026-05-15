@@ -150,9 +150,9 @@ async function dismissMapsOverlays(page: Page, log: (m: string) => void): Promis
 type FeedPlaceHint = { href: string; hint: string }
 
 const MAPS_LITE_PROBLEMAS =
-  'Extracción rápida desde el listado de Maps: la ficha no se abrió en el servidor (bloqueo, consentimiento o timeout). Pueden faltar teléfono y web exactos.'
+  'Listado rápido de Maps (la ficha no se abrió en el servidor): teléfono, web o correo pueden faltar o no estar verificados. Sin auditoría automática del sitio del negocio.'
 const MAPS_LITE_OPORTUNIDADES =
-  'Completar NAP en Google Business Profile y validar teléfono y sitio web abriendo la ficha en Maps manualmente.'
+  'Confirma el contacto en Google Maps o en la web oficial; mejora NAP y presencia local (Google Business Profile, schema).'
 
 type PlacesDetailFields = {
   name?: string
@@ -246,7 +246,15 @@ async function tryEmitLiteFromMapsFeed(
       }
     }
 
-    const p = placeholderAuditPendiente()
+    let problemasDetectados = MAPS_LITE_PROBLEMAS
+    let oportunidades = MAPS_LITE_OPORTUNIDADES
+    const tieneWebNegocio = !!(sitioWeb && !/^https?:\/\/(www\.)?google\./i.test(sitioWeb))
+    if (telefono || tieneWebNegocio) {
+      problemasDetectados =
+        'Datos ampliados con Google Places (o visibles en el listado); conviene validarlos en la ficha del negocio. Sin auditoría automática del sitio web.'
+      oportunidades = MAPS_LITE_OPORTUNIDADES
+    }
+
     const ok = emit.tryEmit(placeKey, {
       nombre,
       direccion,
@@ -255,8 +263,8 @@ async function tryEmitLiteFromMapsFeed(
       telefono,
       correo,
       sitioWeb,
-      problemasDetectados: `${MAPS_LITE_PROBLEMAS} ${p.problemasDetectados}`.trim(),
-      oportunidades: `${MAPS_LITE_OPORTUNIDADES} ${p.oportunidades}`.trim(),
+      problemasDetectados,
+      oportunidades,
       estado: 'Sin contactar',
     })
     if (ok) {
