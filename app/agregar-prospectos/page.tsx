@@ -16,7 +16,10 @@ import {
   deleteClientProspectById,
   clientProspectRowToNegocioFila,
   formatClientProspectError,
+  updateClientProspectListId,
 } from '@/lib/supabase/clientProspects'
+import { listProspectListsForUser } from '@/lib/supabase/collaboration'
+import type { ProspectListRow } from '@/types/collaboration'
 import { CONTACTO_ESTADOS, type ContactoEstado, type NegocioFila } from '@/types/business'
 import type { ClientProspectRow } from '@/types/client-prospect'
 
@@ -42,6 +45,8 @@ export default function AgregarProspectosPage() {
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [successModal, setSuccessModal] = useState<{ kind: 'created' | 'updated'; nombre: string } | null>(null)
+  const [prospectLists, setProspectLists] = useState<ProspectListRow[]>([])
+  const [selectedListId, setSelectedListId] = useState<string | null>(null)
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
@@ -64,13 +69,24 @@ export default function AgregarProspectosPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured()) {
+      setProspectLists([])
+      return
+    }
+    const sb = createBrowserSupabaseClient()
+    void listProspectListsForUser(sb, user.id).then(({ data }) => setProspectLists(data))
+  }, [user])
+
   const resetForm = () => {
     setForm(emptyForm)
     setEditingId(null)
+    setSelectedListId(null)
   }
 
   const startEdit = (r: ClientProspectRow) => {
     setEditingId(r.id)
+    setSelectedListId(r.prospect_list_id ?? null)
     setForm({
       nombre: r.nombre,
       direccion: r.direccion,
@@ -101,11 +117,15 @@ export default function AgregarProspectosPage() {
       const { error: uErr } = await updateManualClientProspect(sb, editingId, form)
       if (uErr) setError(formatClientProspectError(uErr.message))
       else {
-        resetForm()
-        setSuccessModal({ kind: 'updated', nombre: nombreHecho })
+        const { error: lErr } = await updateClientProspectListId(sb, editingId, selectedListId)
+        if (lErr) setError(formatClientProspectError(lErr.message))
+        else {
+          resetForm()
+          setSuccessModal({ kind: 'updated', nombre: nombreHecho })
+        }
       }
     } else {
-      const { error: iErr } = await insertManualClientProspect(sb, user.id, form)
+      const { error: iErr } = await insertManualClientProspect(sb, user.id, form, selectedListId)
       if (iErr) setError(formatClientProspectError(iErr.message))
       else {
         resetForm()
@@ -204,6 +224,29 @@ export default function AgregarProspectosPage() {
             )}
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
+            <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Lista de destino
+              <select
+                className={inputClass + ' mt-1'}
+                value={selectedListId ?? ''}
+                onChange={e => setSelectedListId(e.target.value || null)}
+                disabled={!loggedIn || saving}
+              >
+                <option value="">Personal (sin lista)</option>
+                {prospectLists.map(pl => (
+                  <option key={pl.id} value={pl.id}>
+                    {pl.name}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] text-neutral-500 font-normal">
+                Puedes crear listas compartidas en{' '}
+                <Link href="/listas-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
+                  Listas de prospectos
+                </Link>
+                .
+              </span>
+            </label>
             <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
               Nombre *
               <input

@@ -34,6 +34,19 @@ export async function listProspectSearches(
   return { data: data as ProspectSearchListItem[] | null, error: error ? new Error(error.message) : null }
 }
 
+export async function listProspectSearchesByIds(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<{ data: ProspectSearchListItem[] | null; error: Error | null }> {
+  if (ids.length === 0) return { data: [], error: null }
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('id, created_at, updated_at, categoria, ubicacion, cantidad_solicitada, status, finish_reason, result_count')
+    .in('id', ids)
+    .order('updated_at', { ascending: false })
+  return { data: data as ProspectSearchListItem[] | null, error: error ? new Error(error.message) : null }
+}
+
 export async function fetchProspectSearch(
   supabase: SupabaseClient,
   id: string,

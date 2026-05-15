@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
@@ -16,16 +17,27 @@ import {
   updateClientProspectEstado,
   formatClientProspectError,
 } from '@/lib/supabase/clientProspects'
+import { listProspectListsForUser } from '@/lib/supabase/collaboration'
 import type { ContactoEstado, NegocioFila } from '@/types/business'
 import type { ClientProspectRow } from '@/types/client-prospect'
+import type { ProspectListRow } from '@/types/collaboration'
 
-export default function ClientesProspectosPage() {
+function ClientesProspectosInner() {
   const user = useSupabaseUser()
+  const searchParams = useSearchParams()
+  const listaFromUrl = searchParams.get('lista')
+
   const [rows, setRows] = useState<ClientProspectRow[]>([])
+  const [lists, setLists] = useState<ProspectListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [listFilter, setListFilter] = useState<string>('all')
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
+
+  useEffect(() => {
+    if (listaFromUrl) setListFilter(listaFromUrl)
+  }, [listaFromUrl])
 
   const load = useCallback(async () => {
     if (!user || !isSupabaseConfigured()) {
@@ -35,7 +47,11 @@ export default function ClientesProspectosPage() {
     }
     setLoading(true)
     const sb = createBrowserSupabaseClient()
-    const { data, error: err } = await listAllClientProspects(sb)
+    const [{ data, error: err }, lr] = await Promise.all([
+      listAllClientProspects(sb),
+      listProspectListsForUser(sb, user.id),
+    ])
+    if (lr.data) setLists(lr.data)
     if (err) setError(formatClientProspectError(err.message))
     else setError(null)
     setRows(data ?? [])
@@ -46,7 +62,19 @@ export default function ClientesProspectosPage() {
     void load()
   }, [load])
 
-  const negocios: NegocioFila[] = rows.map(r => ({
+  const listNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const l of lists) m.set(l.id, l.name)
+    return m
+  }, [lists])
+
+  const filteredRows = useMemo(() => {
+    if (listFilter === 'all') return rows
+    if (listFilter === 'none') return rows.filter(r => !r.prospect_list_id)
+    return rows.filter(r => r.prospect_list_id === listFilter)
+  }, [rows, listFilter])
+
+  const negocios: NegocioFila[] = filteredRows.map(r => ({
     ...clientProspectRowToNegocioFila(r),
     prospectSource: r.source,
   }))
@@ -73,6 +101,13 @@ export default function ClientesProspectosPage() {
     else await load()
   }
 
+  const filterHint =
+    listFilter === 'all'
+      ? 'Mostrando todos los accesibles'
+      : listFilter === 'none'
+        ? 'Solo prospectos sin lista'
+        : `Lista: ${listNameById.get(listFilter) ?? listFilter}`
+
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader />
@@ -80,15 +115,19 @@ export default function ClientesProspectosPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100">Clientes prospectos</h1>
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400 max-w-2xl">
-            Listado unificado: marcas con el corazón desde la{' '}
+            Listado unificado (personales y compartidos por lista). Marca desde la{' '}
             <Link href="/" className="text-indigo-600 dark:text-indigo-400 font-medium">
               búsqueda
             </Link>{' '}
-            y altas desde{' '}
+            o alta en{' '}
             <Link href="/agregar-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
               Agregar prospectos
             </Link>
-            . Usa la papelera para eliminar un registro por completo.
+            . Gestiona listas compartidas en{' '}
+            <Link href="/listas-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
+              Listas
+            </Link>
+            .
           </p>
         </div>
 
@@ -99,6 +138,28 @@ export default function ClientesProspectosPage() {
             </Link>{' '}
             para ver tus prospectos guardados.
           </p>
+        )}
+
+        {loggedIn && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-950/40 px-4 py-3">
+            <label className="flex flex-col gap-1 text-xs font-medium text-neutral-700 dark:text-neutral-300 min-w-[220px]">
+              Filtrar por lista
+              <select
+                value={listFilter}
+                onChange={e => setListFilter(e.target.value)}
+                className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-3 py-2 text-sm"
+              >
+                <option value="all">Todas</option>
+                <option value="none">Sin lista (personal)</option>
+                {lists.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-xs text-neutral-500 flex-1">{filterHint}</p>
+          </div>
         )}
 
         {loggedIn && negocios.length > 0 && (
@@ -125,14 +186,32 @@ export default function ClientesProspectosPage() {
           }
         />
 
+        {!loading && loggedIn && filteredRows.length === 0 && rows.length > 0 && (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            No hay prospectos con este filtro. Cambia la lista en el selector superior.
+          </p>
+        )}
+
         {!loading && loggedIn && rows.length === 0 && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Aún no hay prospectos. Márcalos con el corazón en los resultados de una búsqueda o créalos en Agregar prospectos. Para borrar uno de esta lista usa la papelera.
+            Aún no hay prospectos. Márcalos con el corazón en los resultados de una búsqueda o créalos en Agregar prospectos.
           </p>
         )}
       </main>
 
       {error && <Toast message={error} onClose={() => setError(null)} />}
     </div>
+  )
+}
+
+export default function ClientesProspectosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500">Cargando…</div>
+      }
+    >
+      <ClientesProspectosInner />
+    </Suspense>
   )
 }

@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { Suspense, useState, useCallback, useRef, useEffect } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { cn } from '@/lib/utils'
 import { SearchPanel } from '@/components/SearchPanel'
@@ -13,6 +15,8 @@ import {
   readStoredActiveSearchId,
   writeStoredActiveSearchId,
 } from '@/components/SearchHistorySidebar'
+import { ShareResourceDialog } from '@/components/ShareResourceDialog'
+import { AddSearchToFolderDialog } from '@/components/AddSearchToFolderDialog'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
@@ -36,6 +40,10 @@ import {
 } from '@/lib/supabase/clientProspects'
 import { SCRAPE_MAX_MS, type ScrapeStreamDone, type ContactoEstado, type Negocio, type NegocioFila } from '@/types/business'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
+import type { ProspectListRow } from '@/types/collaboration'
+import { listProspectListsForUser } from '@/lib/supabase/collaboration'
+
+const BP_LIST_STORAGE_KEY = 'bp_selected_prospect_list_id'
 
 function parseSseBlocks(buffer: string, onBlock: (event: string, data: string) => void): string {
   const normalized = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -68,8 +76,10 @@ function normalizeNegocios(raw: unknown): NegocioFila[] {
   })
 }
 
-export default function Home() {
+function HomeInner() {
   const user = useSupabaseUser()
+  const searchParams = useSearchParams()
+  const urlSearchId = searchParams.get('search')
   const [negocios, setNegocios] = useState<NegocioFila[]>([])
   const negociosRef = useRef<NegocioFila[]>([])
   const activeSearchIdRef = useRef<string | null>(null)
@@ -85,6 +95,37 @@ export default function Home() {
   const [searchCompleteOpen, setSearchCompleteOpen] = useState(false)
   const [searchCompleteSummary, setSearchCompleteSummary] = useState<SearchCompleteSummary | null>(null)
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false)
+  const [shareSearchOpen, setShareSearchOpen] = useState(false)
+  const [addFolderOpen, setAddFolderOpen] = useState(false)
+  const [prospectLists, setProspectLists] = useState<ProspectListRow[]>([])
+  const [selectedProspectListId, setSelectedProspectListId] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(BP_LIST_STORAGE_KEY) : null
+      setSelectedProspectListId(raw)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (selectedProspectListId) localStorage.setItem(BP_LIST_STORAGE_KEY, selectedProspectListId)
+      else localStorage.removeItem(BP_LIST_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+  }, [selectedProspectListId])
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured()) {
+      setProspectLists([])
+      return
+    }
+    const sb = createBrowserSupabaseClient()
+    void listProspectListsForUser(sb, user.id).then(({ data }) => setProspectLists(data))
+  }, [user])
 
   useEffect(() => {
     negociosRef.current = negocios
@@ -143,11 +184,13 @@ export default function Home() {
     }
     void (async () => {
       const items = await refreshHistory()
+      const urlPick = urlSearchId && items.some(x => x.id === urlSearchId) ? urlSearchId : null
       const stored = readStoredActiveSearchId()
-      const pick = stored && items.some(x => x.id === stored) ? stored : null
+      const storedPick = stored && items.some(x => x.id === stored) ? stored : null
+      const pick = urlPick ?? storedPick
       if (pick) await loadSearchById(pick)
     })()
-  }, [user, refreshHistory, loadSearchById])
+  }, [user, refreshHistory, loadSearchById, urlSearchId])
 
   const handleNewChat = useCallback(() => {
     if (loading) return
@@ -240,7 +283,13 @@ export default function Home() {
           prev.map(r => (r.id === row.id ? { ...r, esProspecto: false, prospectRecordId: null } : r)),
         )
       } else {
-        const { id: pid, error: insErr } = await insertProspectFromSearch(sb, user.id, sid, row)
+        const { id: pid, error: insErr } = await insertProspectFromSearch(
+          sb,
+          user.id,
+          sid,
+          row,
+          selectedProspectListId || null,
+        )
         if (insErr || !pid) {
           setError(formatClientProspectError(insErr?.message))
           return
@@ -251,7 +300,7 @@ export default function Home() {
       }
       scheduleCloudPersist(sid)
     },
-    [user, scheduleCloudPersist],
+    [user, scheduleCloudPersist, selectedProspectListId],
   )
 
   const handleDeleteNegocioRow = useCallback(
@@ -522,6 +571,48 @@ export default function Home() {
               />
             </div>
           )}
+          {loggedIn && activeSearchId && user && (
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-between items-stretch sm:items-center max-w-4xl mx-auto w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-950/40 px-4 py-3">
+              <label className="flex flex-col gap-1 text-xs font-medium text-neutral-700 dark:text-neutral-300 min-w-[200px]">
+                Lista al marcar prospectos
+                <select
+                  value={selectedProspectListId ?? ''}
+                  onChange={e => setSelectedProspectListId(e.target.value || null)}
+                  className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
+                >
+                  <option value="">Personal (sin lista)</option>
+                  {prospectLists.map(pl => (
+                    <option key={pl.id} value={pl.id}>
+                      {pl.name}
+                      {pl.owner_id !== user.id ? ' · compartida' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-2 items-center justify-end">
+                <Link
+                  href="/listas-prospectos"
+                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-2"
+                >
+                  Gestionar listas
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShareSearchOpen(true)}
+                  className="rounded-lg px-3 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  Compartir búsqueda
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddFolderOpen(true)}
+                  className="rounded-lg px-3 py-2 text-xs font-semibold border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                >
+                  Añadir a carpeta
+                </button>
+              </div>
+            </div>
+          )}
           <ResultsTable
             negocios={negocios}
             loading={loading && negocios.length === 0}
@@ -566,6 +657,41 @@ export default function Home() {
           setSearchCompleteSummary(null)
         }}
       />
+
+      {loggedIn && activeSearchId && user && (
+        <>
+          <ShareResourceDialog
+            open={shareSearchOpen}
+            onClose={() => setShareSearchOpen(false)}
+            title={`${lastSearch.categoria} · ${lastSearch.ubicacion}`}
+            resourceType="prospect_search"
+            resourceId={activeSearchId}
+            inviterUserId={user.id}
+            inviterEmail={user.email ?? undefined}
+          />
+          <AddSearchToFolderDialog
+            open={addFolderOpen}
+            onClose={() => setAddFolderOpen(false)}
+            userId={user.id}
+            prospectSearchId={activeSearchId}
+            searchLabel={`${lastSearch.categoria} · ${lastSearch.ubicacion}`}
+          />
+        </>
+      )}
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
+          Cargando…
+        </div>
+      }
+    >
+      <HomeInner />
+    </Suspense>
   )
 }

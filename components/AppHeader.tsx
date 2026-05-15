@@ -6,9 +6,12 @@ import { Building2, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AuthNav } from '@/components/AuthNav'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NotificationsPopover } from '@/components/NotificationsPopover'
 
 const links = [
   { href: '/', label: 'Inicio' },
+  { href: '/carpetas', label: 'Carpetas' },
+  { href: '/listas-prospectos', label: 'Listas' },
   { href: '/agregar-prospectos', label: 'Agregar prospectos' },
   { href: '/clientes-prospectos', label: 'Clientes prospectos' },
 ]
@@ -67,6 +70,7 @@ export function AppHeader({
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <NotificationsPopover />
           <AuthNav />
           <ThemeToggle />
         </div>

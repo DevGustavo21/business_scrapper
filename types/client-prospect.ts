@@ -9,6 +9,7 @@ export interface ClientProspectRow {
   created_at: string
   updated_at: string
   source: ClientProspectSource
+  prospect_list_id: string | null
   prospect_search_id: string | null
   search_row_id: string | null
   nombre: string

@@ -1,12 +1,20 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
+import { upsertMyProfile } from '@/lib/supabase/profiles'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 
 export function AuthNav() {
   const user = useSupabaseUser()
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured()) return
+    const sb = createBrowserSupabaseClient()
+    void upsertMyProfile(sb, user.id, user.email ?? '')
+  }, [user])
 
   if (user === undefined) {
     return <div className="h-8 w-24 rounded-md bg-neutral-200 dark:bg-neutral-700 animate-pulse" aria-hidden />

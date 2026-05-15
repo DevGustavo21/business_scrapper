@@ -84,12 +84,14 @@ export async function insertProspectFromSearch(
   userId: string,
   searchId: string,
   row: NegocioFila,
+  prospectListId?: string | null,
 ): Promise<{ id: string | null; error: Error | null }> {
   const { data, error } = await supabase
     .from(TABLE)
     .insert({
       user_id: userId,
       source: 'search' as const,
+      prospect_list_id: prospectListId ?? null,
       prospect_search_id: searchId,
       search_row_id: row.id,
       ...negocioToDbCols(row),
@@ -159,12 +161,14 @@ export async function insertManualClientProspect(
     oportunidades: string
     estado: string
   },
+  prospectListId?: string | null,
 ): Promise<{ id: string | null; error: Error | null }> {
   const { data, error } = await supabase
     .from(TABLE)
     .insert({
       user_id: userId,
       source: 'manual' as const,
+      prospect_list_id: prospectListId ?? null,
       prospect_search_id: null,
       search_row_id: null,
       nombre: fields.nombre,
@@ -248,6 +252,18 @@ export async function updateClientProspectEstado(
   const { error } = await supabase
     .from(TABLE)
     .update({ estado, updated_at: new Date().toISOString() })
+    .eq('id', prospectId)
+  return { error: error ? new Error(error.message) : null }
+}
+
+export async function updateClientProspectListId(
+  supabase: SupabaseClient,
+  prospectId: string,
+  prospectListId: string | null,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from(TABLE)
+    .update({ prospect_list_id: prospectListId, updated_at: new Date().toISOString() })
     .eq('id', prospectId)
   return { error: error ? new Error(error.message) : null }
 }
