@@ -50,6 +50,8 @@ function Skeleton({ colCount }: { colCount: number }) {
 export function ResultsTable({
   negocios,
   loading,
+  /** True mientras el SSE sigue abierto y ya hay filas: no bloquea la tabla con sensación de “cargando vacío”. */
+  streamActive,
   requestedQty,
   onEstadoChange,
   showOrigenColumn,
@@ -59,6 +61,7 @@ export function ResultsTable({
 }: {
   negocios: NegocioFila[]
   loading: boolean
+  streamActive?: boolean
   requestedQty?: number
   onEstadoChange: (id: string, estado: ContactoEstado) => void
   /** Lista «Clientes prospectos»: muestra si el alta fue manual o desde búsqueda. */
@@ -141,9 +144,9 @@ export function ResultsTable({
     )
 
   const showSkeletonOnly = loading && negocios.length === 0
-  const streamingMore = loading && negocios.length > 0
+  const streamingMore = Boolean(streamActive) && negocios.length > 0
   const colCount = cols.length
-  if (!loading && negocios.length === 0) return null
+  if (!loading && !streamingMore && negocios.length === 0) return null
 
   const origenLabel = (r: NegocioFila) =>
     r.prospectSource === 'manual' ? 'Manual' : r.prospectSource === 'search' ? 'Búsqueda' : '—'
@@ -165,7 +168,21 @@ export function ResultsTable({
                       / hasta <span className="font-semibold">{requestedQty}</span> solicitados
                     </>
                   )}
-                  <span className="text-neutral-400"> · extrayendo (máx. 4 min)</span>
+                  <span className="text-neutral-400"> · conectando con el servidor…</span>
+                </>
+              ) : streamingMore ? (
+                <>
+                  {requestedQty && requestedQty > negocios.length && (
+                    <>
+                      {' '}
+                      / hasta <span className="font-semibold">{requestedQty}</span> solicitados
+                    </>
+                  )}
+                  <span className="text-neutral-400">
+                    {' '}
+                    · sigue extrayendo en segundo plano (puede tardar varios minutos más; ya puedes usar la tabla y
+                    exportar).
+                  </span>
                 </>
               ) : (
                 <>{negocios.length === 1 ? ' negocio encontrado' : ' negocios encontrados'}</>
@@ -340,7 +357,7 @@ export function ResultsTable({
             {streamingMore && (
               <tr className="border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
                 <td colSpan={colCount} className="px-3 py-3 text-center text-xs text-neutral-500 dark:text-neutral-400">
-                  Añadiendo filas conforme se obtienen datos…
+                  El servidor sigue enviando negocios; las filas aparecerán aquí conforme lleguen…
                 </td>
               </tr>
             )}

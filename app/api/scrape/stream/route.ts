@@ -46,7 +46,17 @@ export async function POST(req: NextRequest): Promise<Response> {
       const send = (event: string, data: unknown) => {
         controller.enqueue(sseEncode(event, data))
       }
+      /** Evita que Vercel/CDN acumulen el cuerpo hasta el final: vacía buffers entre negocios. */
+      const enc = new TextEncoder()
+      let pingTimer: ReturnType<typeof setInterval> | null = null
       try {
+        pingTimer = setInterval(() => {
+          try {
+            controller.enqueue(enc.encode(`: keepalive ${Date.now()}\n\n`))
+          } catch {
+            /* stream cerrado */
+          }
+        }, 12_000)
         const { reason, total, requested } = await streamScrapeNegocios(categoria, ubicacion, qty, SCRAPE_MAX_MS, n =>
           send('negocio', clipNegocioForSse(n)),
         )
@@ -56,6 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         const message = err instanceof Error ? err.message : 'Error desconocido.'
         send('error', { message })
       } finally {
+        if (pingTimer) clearInterval(pingTimer)
         controller.close()
       }
     },

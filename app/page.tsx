@@ -508,8 +508,9 @@ export default function Home() {
           <SearchPanel onSearch={handleSearch} loading={loading} />
           {loading && (
             <p className="text-center text-sm text-neutral-500 dark:text-neutral-400 max-w-xl mx-auto -mt-4">
-              Los resultados aparecen al vuelo. Fuentes: <strong>Google Maps</strong> y, si hace falta,{' '}
-              <strong>Páginas Amarillas</strong>. Hasta 4 minutos por búsqueda.
+              Fuentes: <strong>Google Maps</strong> y, si hace falta, <strong>Páginas Amarillas</strong>. Las filas se van
+              sumando al vuelo; la extracción completa puede tardar <strong>hasta unos 4 minutos</strong>. Cuando ya veas
+              datos en la tabla, la búsqueda <strong>sigue en segundo plano</strong> hasta el botón vuelva a «Buscar».
             </p>
           )}
           {negocios.length > 0 && (
@@ -523,19 +524,24 @@ export default function Home() {
           )}
           <ResultsTable
             negocios={negocios}
-            loading={loading}
+            loading={loading && negocios.length === 0}
+            streamActive={loading && negocios.length > 0}
             requestedQty={requestedQty}
             onEstadoChange={handleEstadoChange}
             prospectHeart={
               loggedIn && activeSearchId
-                ? { enabled: true, disabled: loading, onToggle: handleProspectToggle }
+                ? {
+                    enabled: true,
+                    disabled: loading && negocios.length === 0,
+                    onToggle: handleProspectToggle,
+                  }
                 : undefined
             }
             deleteRow={
               loggedIn && activeSearchId
                 ? {
                     enabled: true,
-                    disabled: loading,
+                    disabled: loading && negocios.length === 0,
                     title: 'Eliminar esta fila de la búsqueda',
                     onDelete: handleDeleteNegocioRow,
                   }
