@@ -83,7 +83,8 @@ function mapsPlaceDedupeKey(href: string): string {
     const looksLikeFicha =
       /\/maps\/place\//i.test(u.pathname) ||
       /[?&]cid=/i.test(u.search) ||
-      /[?&]ftid=/i.test(u.search)
+      /[?&]ftid=/i.test(u.search) ||
+      /[?&]place_id=/i.test(u.search)
     if (!onGoogleMaps || !looksLikeFicha) return href.trim().replace(/\s+/g, ' ').toLowerCase()
     return `${u.origin}${u.pathname}${u.search}${u.hash}`.replace(/\s+/g, '').toLowerCase()
   } catch {
@@ -118,12 +119,101 @@ function mapsWantsDeepWebAudit(): boolean {
   return process.env.SCRAPE_MAPS_WEB_AUDIT === '1'
 }
 
+/** Cierre de consentimiento / diálogos que tapan el listado de resultados. */
+async function dismissMapsOverlays(page: Page, log: (m: string) => void): Promise<void> {
+  const candidates = [
+    'button:has-text("Aceptar todo")',
+    'button:has-text("Accept all")',
+    'button:has-text("I agree")',
+    'button:has-text("Rechazar todo")',
+    'button:has-text("Reject all")',
+    'button:has-text("Tout accepter")',
+    '[aria-label="Aceptar todo"]',
+    '[aria-label="Accept all"]',
+    'form[action*="consent"] button',
+  ]
+  for (const sel of candidates) {
+    const loc = page.locator(sel).first()
+    const vis = await loc.isVisible({ timeout: 400 }).catch(() => false)
+    if (vis) {
+      await loc.click({ timeout: 1500 }).catch(() => {})
+      await delay(400, 900)
+      log(`[scraper] Maps: clic en overlay (${sel.slice(0, 48)}…)`)
+    }
+  }
+  await page.keyboard.press('Escape').catch(() => {})
+  await delay(200, 400)
+}
+
+type FeedPlaceHint = { href: string; hint: string }
+
+function cleanFeedHintName(raw: string): string {
+  const t = raw.replace(/\s+/g, ' ').trim()
+  if (t.length < 2 || /^google maps$/i.test(t)) return ''
+  const head = t.split('·')[0]?.split('|')[0]?.trim() ?? t
+  if (head.length < 2) return ''
+  if (/^resultados de búsqueda$/i.test(head)) return ''
+  return head.slice(0, 180)
+}
+
+/** Pistas de nombre desde tarjetas del feed (la ficha a veces no hidrata el H1 a tiempo). */
+async function collectFeedPlaceHints(page: Page): Promise<FeedPlaceHint[]> {
+  return page.evaluate(() => {
+    const out: FeedPlaceHint[] = []
+    const seen = new Set<string>()
+    const push = (href: string, hintRaw: string) => {
+      const h = href.trim()
+      if (!h || seen.has(h)) return
+      if (!/google\./i.test(h) && !/maps\.google\./i.test(h)) return
+      if (!/\/maps\/place\/|[?&]cid=|[?&]ftid=/i.test(h)) return
+      seen.add(h)
+      const hint = (hintRaw || '').replace(/\s+/g, ' ').trim()
+      if (hint.length < 2) return
+      out.push({ href, hint })
+    }
+    const feed = document.querySelector('[role="feed"]')
+    const roots: Element[] = []
+    if (feed) roots.push(feed)
+    if (document.body) roots.push(document.body)
+    for (const root of roots) {
+      root.querySelectorAll('[role="article"]').forEach(card => {
+        const a = card.querySelector(
+          'a[href*="/maps/place/"], a[href*="maps.google.com"], a[href*="cid="], a[href*="ftid="]',
+        ) as HTMLAnchorElement | null
+        if (!a?.href) return
+        let hint = (card.getAttribute('aria-label') || '').trim()
+        if (hint.length < 3) {
+          const el = card.querySelector(
+            '.fontHeadlineSmall, [class*="fontHeadlineSmall"], .qBF1Pd.fontHeadlineSmall, h3, .NrDZNb',
+          )
+          hint = (el?.textContent || a.textContent || '').trim()
+        }
+        push(a.href, hint)
+        if (out.length >= 90) return out
+      })
+      root.querySelectorAll('a[href*="/maps/place/"], a[href*="cid="], a[href*="ftid="]').forEach(a => {
+        const el = a as HTMLAnchorElement
+        const card = el.closest('[role="article"]') || el.parentElement
+        const hint =
+          card?.getAttribute('aria-label')?.trim() ||
+          card?.querySelector('.fontHeadlineSmall, [class*="fontHeadlineSmall"]')?.textContent?.trim() ||
+          el.textContent?.trim() ||
+          ''
+        push(el.href, hint)
+        if (out.length >= 90) return out
+      })
+    }
+    return out
+  })
+}
+
 /** Enlaces a fichas de negocio en el panel de resultados (DOM cambia con frecuencia). */
 async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out: string[] = []
     const seen = new Set<string>()
     const push = (raw: string) => {
+      if (out.length >= 420) return
       const h = raw.trim()
       if (!h) return
       let u: URL
@@ -142,11 +232,11 @@ async function collectMapsPlaceLinks(page: Page): Promise<string[]> {
       const isFicha =
         /\/maps\/place\//i.test(u.pathname) ||
         /[?&]cid=/i.test(u.search) ||
-        /[?&]ftid=/i.test(u.search)
+        /[?&]ftid=/i.test(u.search) ||
+        /[?&]place_id=/i.test(u.search)
       if (!isFicha) return
       seen.add(href)
       out.push(href)
-      if (out.length >= 360) return
     }
     const feed = document.querySelector('[role="feed"]')
     const scanRoots: Element[] = []
@@ -364,8 +454,14 @@ async function scrapeGoogleMaps(
     if (emit.timeUp()) return
     await delay(1400, 2200)
     if (emit.timeUp()) return
+    await dismissMapsOverlays(page, log)
+    await delay(500, 900)
+    if (emit.timeUp()) return
 
     const feedLoc = page.locator('[role="feed"]').first()
+    const hintByPlaceKey = new Map<string, string>()
+    let didAltListUrl = false
+    const listUrlAlt = `https://www.google.com/maps/search/${encodeURIComponent(`${categoria} ${ubicacion}`)}?hl=${listLocale.startsWith('en') ? 'en' : 'es'}`
 
     const auditFallback = {
       correo: '',
@@ -387,6 +483,10 @@ async function scrapeGoogleMaps(
         await delay(process.env.VERCEL ? 550 : 400, process.env.VERCEL ? 900 : 750)
         let nombre = (await extractMapsPlaceTitle(dp)).trim()
         if (!nombre) nombre = fallbackNombreFromMapsUrl(link)
+        if (!nombre) {
+          const fromFeed = cleanFeedHintName(hintByPlaceKey.get(placeKey) ?? '')
+          if (fromFeed) nombre = fromFeed
+        }
         const direccionMaps = await dp.locator('[data-item-id="address"]').innerText()
           .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
         const telefono = await dp.locator('[data-item-id^="phone"]').innerText()
@@ -460,7 +560,7 @@ async function scrapeGoogleMaps(
         await feedLoc.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
         await feedLoc.press('End').catch(() => {})
         await delay(280, 520)
-        const scrollSteps = Math.min(34, Math.max(18, Math.ceil(cantidadSolicitada * 2.4)))
+        const scrollSteps = Math.min(42, Math.max(22, Math.ceil(cantidadSolicitada * 2.8)))
         for (let s = 0; s < scrollSteps && !emit.timeUp() && !emit.full(); s++) {
           await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 1400) }, { timeout: 3200 }).catch(() => {})
           await delay(120, 280)
@@ -473,10 +573,24 @@ async function scrapeGoogleMaps(
         }
       }
 
-      const links = await withTimeout(collectMapsPlaceLinks(page), 16_000, [] as string[])
+      const [links, feedHints] = await Promise.all([
+        withTimeout(collectMapsPlaceLinks(page), 16_000, [] as string[]),
+        withTimeout(collectFeedPlaceHints(page), 12_000, [] as FeedPlaceHint[]),
+      ])
+      for (const { href, hint } of feedHints) {
+        const k = mapsPlaceDedupeKey(href)
+        const cleaned = cleanFeedHintName(hint)
+        if (cleaned && !hintByPlaceKey.has(k)) hintByPlaceKey.set(k, cleaned)
+      }
+      const linkSet = new Set<string>(links)
+      for (const { href } of feedHints) {
+        if (href.trim()) linkSet.add(href.trim())
+      }
+      const mergedLinks = [...linkSet]
+
       const fresh: string[] = []
       const seenInCycle = new Set<string>()
-      for (const l of links) {
+      for (const l of mergedLinks) {
         const k = mapsPlaceDedupeKey(l)
         if (visitedPlaceUrls.has(k) || seenInCycle.has(k)) continue
         seenInCycle.add(k)
@@ -484,11 +598,23 @@ async function scrapeGoogleMaps(
       }
 
       log(
-        `[scraper] Maps ciclo: crudos=${links.length} nuevos=${fresh.length} emitidos=${emit.count()}/${cantidadSolicitada} stagnant=${stagnant} workers=${workersHere}`,
+        `[scraper] Maps ciclo: crudos=${mergedLinks.length} hints=${feedHints.length} nuevos=${fresh.length} emitidos=${emit.count()}/${cantidadSolicitada} stagnant=${stagnant} workers=${workersHere}`,
       )
 
       if (fresh.length === 0) {
         stagnant++
+        if (
+          !didAltListUrl &&
+          stagnant >= 8 &&
+          emit.count() < Math.max(2, Math.ceil(cantidadSolicitada / 2))
+        ) {
+          didAltListUrl = true
+          stagnant = 0
+          log('[scraper] Maps: pocos enlaces; reintentando búsqueda alternativa…')
+          await page.goto(listUrlAlt, { waitUntil: NAV_WAIT, timeout: NAV_TIMEOUT_MS }).catch(() => {})
+          await delay(1200, 2000)
+          await dismissMapsOverlays(page, log)
+        }
         await delay(700, 1300)
         continue
       }
