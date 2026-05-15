@@ -154,12 +154,62 @@ const MAPS_LITE_PROBLEMAS =
 const MAPS_LITE_OPORTUNIDADES =
   'Completar NAP en Google Business Profile y validar teléfono y sitio web abriendo la ficha en Maps manualmente.'
 
-function tryEmitLiteFromMapsFeed(
+type PlacesDetailFields = {
+  name?: string
+  formatted_address?: string
+  formatted_phone_number?: string
+  international_phone_number?: string
+  website?: string
+  url?: string
+}
+
+async function findPlaceIdByTextQuery(bq: string, key: string): Promise<string | null> {
+  const u = new URL('https://maps.googleapis.com/maps/api/place/findplacefromtext/json')
+  u.searchParams.set('input', bq)
+  u.searchParams.set('inputtype', 'textquery')
+  u.searchParams.set('fields', 'place_id,name')
+  u.searchParams.set('key', key)
+  try {
+    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(12_000) })
+    if (!res.ok) return null
+    const data = (await res.json()) as { status: string; candidates?: { place_id: string }[] }
+    if (data.status !== 'OK' || !data.candidates?.[0]?.place_id) return null
+    return data.candidates[0].place_id
+  } catch {
+    return null
+  }
+}
+
+async function fetchGooglePlaceDetailsResult(
+  placeId: string,
+  key: string,
+): Promise<PlacesDetailFields | null> {
+  const u = new URL('https://maps.googleapis.com/maps/api/place/details/json')
+  u.searchParams.set('place_id', placeId)
+  u.searchParams.set(
+    'fields',
+    'name,formatted_address,formatted_phone_number,international_phone_number,website,url',
+  )
+  u.searchParams.set('key', key)
+  try {
+    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(14_000) })
+    if (!res.ok) return null
+    const data = (await res.json()) as { status: string; result?: PlacesDetailFields; error_message?: string }
+    if (data.status !== 'OK' || !data.result) return null
+    return data.result
+  } catch {
+    return null
+  }
+}
+
+async function tryEmitLiteFromMapsFeed(
   emit: ScrapeEmit,
   visitedPlaceUrls: Set<string>,
   feedHints: FeedPlaceHint[],
+  ubicacion: string,
   log: (m: string) => void,
-): number {
+): Promise<number> {
+  const apiKey = placesServerApiKey()
   let added = 0
   for (const { href, hint } of feedHints) {
     if (emit.timeUp() || emit.full()) break
@@ -168,16 +218,43 @@ function tryEmitLiteFromMapsFeed(
     const nombre = cleanFeedHintName(hint)
     if (!nombre) continue
     const rawAddr = direccionLiteFromHint(hint)
-    const { direccion, ciudad, pais } = splitDireccionResultado(rawAddr)
+    let { direccion, ciudad, pais } = splitDireccionResultado(rawAddr)
+    let telefono = ''
+    let sitioWeb = ''
+    let correo = ''
+
+    if (apiKey) {
+      const q = [nombre, rawAddr || ubicacion].filter(Boolean).join(', ')
+      const pid = await findPlaceIdByTextQuery(q, apiKey)
+      if (pid) {
+        const det = await fetchGooglePlaceDetailsResult(pid, apiKey)
+        if (det?.formatted_address) {
+          const s = splitDireccionResultado(det.formatted_address.trim())
+          if (s.direccion || s.ciudad || s.pais) {
+            direccion = s.direccion
+            ciudad = s.ciudad
+            pais = s.pais
+          }
+        }
+        telefono = (det?.international_phone_number ?? det?.formatted_phone_number ?? '').trim()
+        const w = (det?.website ?? '').trim()
+        const mapsUrl = (det?.url ?? '').trim()
+        sitioWeb = w || mapsUrl
+        const webForMail = w && !/^https?:\/\/(www\.)?google\./i.test(w) ? w : ''
+        if (webForMail && scrapeWantsFetchEmailFromWeb())
+          correo = await scrapeFetchEmailFromUrl(webForMail)
+      }
+    }
+
     const p = placeholderAuditPendiente()
     const ok = emit.tryEmit(placeKey, {
       nombre,
       direccion,
       ciudad,
       pais,
-      telefono: '',
-      correo: '',
-      sitioWeb: '',
+      telefono,
+      correo,
+      sitioWeb,
       problemasDetectados: `${MAPS_LITE_PROBLEMAS} ${p.problemasDetectados}`.trim(),
       oportunidades: `${MAPS_LITE_OPORTUNIDADES} ${p.oportunidades}`.trim(),
       estado: 'Sin contactar',
@@ -353,6 +430,70 @@ async function extractMapsPlaceTitle(page: Page): Promise<string> {
   return junk(trimmed) ? '' : trimmed
 }
 
+/** NAP en ficha Maps: varios selectores + texto en panel (DOM cambia con frecuencia). */
+async function extractMapsPlaceNap(page: Page): Promise<{ direccionMaps: string; telefono: string; sitioWeb: string }> {
+  const nap = await page.evaluate(() => {
+    const txt = (el: Element | null | undefined) => (el?.textContent || '').replace(/\s+/g, ' ').trim()
+    let direccionMaps = txt(document.querySelector('[data-item-id="address"]'))
+    if (!direccionMaps) direccionMaps = txt(document.querySelector('button[data-item-id="address"]'))
+    if (!direccionMaps) {
+      const b = document.querySelector(
+        'button[aria-label*="Dirección" i], button[aria-label*="Address" i], [data-item-id="address"]',
+      ) as HTMLElement | null
+      const al = (b?.getAttribute('aria-label') || '').trim()
+      direccionMaps = al.replace(/^(?:dirección|address)\s*[:\u2013\-]\s*/i, '').trim() || txt(b)
+    }
+    let telefono = txt(document.querySelector('[data-item-id^="phone"]'))
+    if (!telefono) telefono = txt(document.querySelector('button[data-item-id^="phone"]'))
+    if (!telefono) {
+      const pb = document.querySelector(
+        'button[aria-label*="phone" i], button[aria-label*="Phone" i], button[aria-label*="Teléfono" i], button[aria-label*="Telefono" i]',
+      )
+      const al = (pb?.getAttribute('aria-label') || '').trim()
+      telefono = al.replace(/^(?:teléfono|telefono|phone)\s*[:\u2013\-]\s*/i, '').trim() || txt(pb)
+    }
+    let sitioWeb = ''
+    const auth = document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement | null
+    if (auth?.href && !/^https?:\/\/[^/]*\.google\./i.test(auth.href)) sitioWeb = auth.href.trim()
+    if (!sitioWeb) {
+      document.querySelectorAll('a[href^="http"]').forEach(a => {
+        const el = a as HTMLAnchorElement
+        const h = el.href
+        if (!h || /google\.(com|co|es)|gstatic\.com|googleusercontent\.com|schema\.org|w3\.org|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(h))
+          return
+        const lab = ((el.getAttribute('aria-label') || '') + ' ' + (el.textContent || '')).toLowerCase()
+        if (
+          el.getAttribute('data-item-id') === 'authority' ||
+          /\b(website|web site|sitio web|página web|homepage)\b/i.test(lab)
+        ) {
+          sitioWeb = h
+        }
+      })
+    }
+    return { direccionMaps, telefono, sitioWeb }
+  })
+  let direccionMaps = nap.direccionMaps.trim()
+  let telefono = nap.telefono.trim()
+  let sitioWeb = nap.sitioWeb.trim()
+  if (!direccionMaps) {
+    direccionMaps =
+      (await page.locator('[data-item-id="address"]').first().innerText({ timeout: 1800 }).catch(() => '')) ||
+      (await page.locator('button[data-item-id="address"]').first().innerText({ timeout: 1200 }).catch(() => ''))
+    direccionMaps = direccionMaps.trim()
+  }
+  if (!telefono) {
+    telefono =
+      (await page.locator('[data-item-id^="phone"]').first().innerText({ timeout: 1800 }).catch(() => '')) ||
+      (await page.locator('button[data-item-id^="phone"]').first().innerText({ timeout: 1200 }).catch(() => ''))
+    telefono = telefono.trim()
+  }
+  if (!sitioWeb) {
+    const href = await page.locator('a[data-item-id="authority"]').first().getAttribute('href').catch(() => null)
+    if (href && !/^https?:\/\/[^/]*\.google\./i.test(href)) sitioWeb = href.trim()
+  }
+  return { direccionMaps, telefono, sitioWeb }
+}
+
 /** Maps en inglés suele hidratar mejor resultados en EE.UU. */
 function browserLocaleForUbicacion(ubicacion: string): string {
   const u = ubicacion.toLowerCase()
@@ -381,6 +522,49 @@ async function extractEmail(page: Page): Promise<string> {
     !e.includes('example') && !e.includes('sentry') &&
     !e.includes('@2x') && !e.endsWith('.png')
   )[0] ?? ''
+}
+
+function pickEmailFromHtml(html: string): string {
+  const m = html.match(/\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g)
+  if (!m) return ''
+  const ok = (e: string) =>
+    !e.includes('example') && !e.includes('sentry') && !e.includes('@2x') && !e.endsWith('.png') &&
+    !/\.(png|jpe?g|gif|webp)(\b|$)/i.test(e)
+  return m.find(ok) ?? ''
+}
+
+/** Intenta sacar un correo público de la portada (fetch HTTP, sin Playwright). */
+async function scrapeFetchEmailFromUrl(url: string): Promise<string> {
+  let u = url.trim()
+  if (!/^https?:\/\//i.test(u)) u = `https://${u}`
+  if (/^https?:\/\/(www\.)?google\./i.test(u)) return ''
+  try {
+    const res = await fetch(u, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(6500),
+      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' },
+    })
+    if (!res.ok) return ''
+    const text = await res.text()
+    const fromBody = pickEmailFromHtml(text)
+    if (fromBody) return fromBody
+    const mailto = text.match(/mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i)
+    return mailto?.[1] ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function scrapeWantsFetchEmailFromWeb(): boolean {
+  return process.env.SCRAPE_FETCH_EMAIL !== '0'
+}
+
+function placesServerApiKey(): string {
+  return (
+    process.env.GOOGLE_PLACES_API_KEY?.trim() ||
+    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
+    ''
+  )
 }
 
 const SIN_WEB_PROBLEMAS =
@@ -581,13 +765,6 @@ async function scrapeGoogleMaps(
           const fromFeed = cleanFeedHintName(hintByPlaceKey.get(placeKey) ?? '')
           if (fromFeed) nombre = fromFeed
         }
-        const direccionMaps = await dp.locator('[data-item-id="address"]').innerText()
-          .catch(async () => dp.locator('button[data-tooltip="Copy address"]').innerText().catch(() => ''))
-        const telefono = await dp.locator('[data-item-id^="phone"]').innerText()
-          .catch(async () => dp.locator('button[data-tooltip="Copy phone number"]').innerText().catch(() => ''))
-        let sitioWeb = ''
-        const webEl = await dp.$('a[data-item-id="authority"]')
-        if (webEl) sitioWeb = (await webEl.getAttribute('href')) ?? ''
         if (!nombre) {
           const fails = (placeTitleFailCounts.get(placeKey) ?? 0) + 1
           placeTitleFailCounts.set(placeKey, fails)
@@ -595,6 +772,7 @@ async function scrapeGoogleMaps(
           log(`[scraper] Maps: sin nombre (intento ${fails}/2) ${placeKey.slice(0, 80)}`)
           return
         }
+        const { direccionMaps, telefono, sitioWeb } = await extractMapsPlaceNap(dp)
         const sw = sitioWeb.trim()
         let correo: string
         let problemasDetectados: string
@@ -624,6 +802,14 @@ async function scrapeGoogleMaps(
           problemasDetectados = p.problemasDetectados
           oportunidades = p.oportunidades
         }
+        if (
+          !correo.trim() &&
+          sw &&
+          scrapeWantsFetchEmailFromWeb() &&
+          !/^https?:\/\/(www\.)?google\./i.test(sw)
+        ) {
+          correo = await scrapeFetchEmailFromUrl(sw)
+        }
         if (emit.timeUp()) return
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionMaps)
         const emitted = emit.tryEmit(placeKey, {
@@ -632,8 +818,8 @@ async function scrapeGoogleMaps(
           ciudad,
           pais,
           telefono: telefono.trim(),
-          correo,
-          sitioWeb,
+          correo: correo.trim(),
+          sitioWeb: sw || sitioWeb.trim(),
           problemasDetectados,
           oportunidades,
           estado: 'Sin contactar',
@@ -676,7 +862,7 @@ async function scrapeGoogleMaps(
         const cleaned = cleanFeedHintName(hint)
         if (cleaned && !hintByPlaceKey.has(k)) hintByPlaceKey.set(k, cleaned)
       }
-      tryEmitLiteFromMapsFeed(emit, visitedPlaceUrls, feedHints, log)
+      await tryEmitLiteFromMapsFeed(emit, visitedPlaceUrls, feedHints, ubicacion, log)
 
       const linkSet = new Set<string>(links)
       for (const { href } of feedHints) {
@@ -806,6 +992,14 @@ async function scrapePaginasAmarillas(
           problemasDetectados = p.problemasDetectados
           oportunidades = p.oportunidades
         }
+        if (
+          !correo.trim() &&
+          sw &&
+          scrapeWantsFetchEmailFromWeb() &&
+          !/^https?:\/\/(www\.)?google\./i.test(sw)
+        ) {
+          correo = await scrapeFetchEmailFromUrl(sw)
+        }
         if (emit.timeUp()) break
         const { direccion, ciudad, pais } = splitDireccionResultado(direccionListado)
         const paKey = `pa|${nombre}|${telefono}|${sitioWeb}|${direccionListado}`.toLowerCase().slice(0, 400)
@@ -891,18 +1085,26 @@ async function scrapeGooglePlacesTextSearchApi(
       const name = (r.name ?? '').trim()
       if (!pid || !name) continue
       const dedupe = `gplaces|${pid}`
-      const addr = (r.formatted_address ?? '').trim()
-      const { direccion, ciudad, pais } = splitDireccionResultado(addr)
-      const ph = placeholderAuditPendiente()
+      const det = await fetchGooglePlaceDetailsResult(pid, key)
+      const addrStr = (det?.formatted_address ?? r.formatted_address ?? '').trim()
+      const { direccion, ciudad, pais } = splitDireccionResultado(addrStr)
+      const telefono = (det?.international_phone_number ?? det?.formatted_phone_number ?? '').trim()
       const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(pid)}`
+      let sitioWeb = (det?.website ?? '').trim() || (det?.url ?? '').trim()
+      if (!sitioWeb) sitioWeb = mapsLink
+      let correo = ''
+      const webForMail = (det?.website ?? '').trim()
+      if (webForMail && scrapeWantsFetchEmailFromWeb() && !/^https?:\/\/(www\.)?google\./i.test(webForMail))
+        correo = await scrapeFetchEmailFromUrl(webForMail)
+      const ph = placeholderAuditPendiente()
       emit.tryEmit(dedupe, {
         nombre: name,
         direccion,
         ciudad,
         pais,
-        telefono: '',
-        correo: '',
-        sitioWeb: mapsLink,
+        telefono,
+        correo,
+        sitioWeb,
         problemasDetectados: `Origen: Google Places (API). ${ph.problemasDetectados}`.trim(),
         oportunidades: ph.oportunidades,
         estado: 'Sin contactar',
