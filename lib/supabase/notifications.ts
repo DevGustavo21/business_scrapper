@@ -38,3 +38,9 @@ export async function markAllNotificationsRead(supabase: SupabaseClient) {
     .is('read_at', null)
   return { error: error ? new Error(error.message) : null }
 }
+
+/** Borra una fila propia. Requiere política `notifications_delete_own` (migración 006). Tras aceptar/rechazar, el trigger de la 007 también puede eliminarla en servidor. */
+export async function deleteMyNotification(supabase: SupabaseClient, id: string) {
+  const { error } = await supabase.from('notifications').delete().eq('id', id)
+  return { error: error ? new Error(error.message) : null }
+}

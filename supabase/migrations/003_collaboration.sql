@@ -1,5 +1,6 @@
 -- Colaboración: perfiles (email), carpetas de búsquedas, listas de prospectos, invitaciones, notificaciones.
 -- Ejecutar en Supabase → SQL Editor tras 001 y 002.
+-- Nota: collaboration_members / collaboration_invites se crean antes que las políticas de carpetas/listas que los citan.
 
 -- --- Utilidad email ----------------------------------------------------------
 
@@ -66,177 +67,7 @@ on conflict (id) do update set
   email = excluded.email,
   updated_at = now();
 
--- --- Carpetas de búsquedas ----------------------------------------------------
-
-create table if not exists public.search_folders (
-  id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references auth.users (id) on delete cascade,
-  name text not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists search_folders_owner_idx on public.search_folders (owner_id, updated_at desc);
-
-create table if not exists public.search_folder_items (
-  folder_id uuid not null references public.search_folders (id) on delete cascade,
-  prospect_search_id uuid not null references public.prospect_searches (id) on delete cascade,
-  added_by uuid not null references auth.users (id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (folder_id, prospect_search_id)
-);
-
-create index if not exists search_folder_items_search_idx on public.search_folder_items (prospect_search_id);
-
-alter table public.search_folders enable row level security;
-alter table public.search_folder_items enable row level security;
-
-drop policy if exists search_folders_select on public.search_folders;
-create policy search_folders_select on public.search_folders
-  for select using (
-    owner_id = (select auth.uid())
-    or exists (
-      select 1 from public.collaboration_members cm
-      where cm.resource_type = 'search_folder'
-        and cm.resource_id = search_folders.id
-        and cm.user_id = (select auth.uid())
-    )
-  );
-
-drop policy if exists search_folders_insert on public.search_folders;
-create policy search_folders_insert on public.search_folders
-  for insert with check (owner_id = (select auth.uid()));
-
-drop policy if exists search_folders_update on public.search_folders;
-create policy search_folders_update on public.search_folders
-  for update using (
-    owner_id = (select auth.uid())
-    or exists (
-      select 1 from public.collaboration_members cm
-      where cm.resource_type = 'search_folder'
-        and cm.resource_id = search_folders.id
-        and cm.user_id = (select auth.uid())
-        and cm.role = 'editor'
-    )
-  );
-
-drop policy if exists search_folders_delete on public.search_folders;
-create policy search_folders_delete on public.search_folders
-  for delete using (owner_id = (select auth.uid()));
-
-drop policy if exists search_folder_items_select on public.search_folder_items;
-create policy search_folder_items_select on public.search_folder_items
-  for select using (
-    exists (
-      select 1 from public.search_folders sf
-      where sf.id = search_folder_items.folder_id
-        and (
-          sf.owner_id = (select auth.uid())
-          or exists (
-            select 1 from public.collaboration_members cm
-            where cm.resource_type = 'search_folder'
-              and cm.resource_id = sf.id
-              and cm.user_id = (select auth.uid())
-          )
-        )
-    )
-  );
-
-drop policy if exists search_folder_items_insert on public.search_folder_items;
-create policy search_folder_items_insert on public.search_folder_items
-  for insert with check (
-    added_by = (select auth.uid())
-    and exists (
-      select 1 from public.prospect_searches ps
-      where ps.id = prospect_search_id
-        and ps.user_id = (select auth.uid())
-    )
-    and exists (
-      select 1 from public.search_folders sf
-      where sf.id = folder_id
-        and (
-          sf.owner_id = (select auth.uid())
-          or exists (
-            select 1 from public.collaboration_members cm
-            where cm.resource_type = 'search_folder'
-              and cm.resource_id = sf.id
-              and cm.user_id = (select auth.uid())
-              and cm.role = 'editor'
-          )
-        )
-    )
-  );
-
-drop policy if exists search_folder_items_delete on public.search_folder_items;
-create policy search_folder_items_delete on public.search_folder_items
-  for delete using (
-    exists (
-      select 1 from public.search_folders sf
-      where sf.id = search_folder_items.folder_id
-        and (
-          sf.owner_id = (select auth.uid())
-          or exists (
-            select 1 from public.collaboration_members cm
-            where cm.resource_type = 'search_folder'
-              and cm.resource_id = sf.id
-              and cm.user_id = (select auth.uid())
-              and cm.role = 'editor'
-          )
-        )
-    )
-  );
-
--- --- Listas de prospectos -----------------------------------------------------
-
-create table if not exists public.prospect_lists (
-  id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references auth.users (id) on delete cascade,
-  name text not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists prospect_lists_owner_idx on public.prospect_lists (owner_id, updated_at desc);
-
-alter table public.client_prospects
-  add column if not exists prospect_list_id uuid references public.prospect_lists (id) on delete set null;
-
-alter table public.prospect_lists enable row level security;
-
-drop policy if exists prospect_lists_select on public.prospect_lists;
-create policy prospect_lists_select on public.prospect_lists
-  for select using (
-    owner_id = (select auth.uid())
-    or exists (
-      select 1 from public.collaboration_members cm
-      where cm.resource_type = 'prospect_list'
-        and cm.resource_id = prospect_lists.id
-        and cm.user_id = (select auth.uid())
-    )
-  );
-
-drop policy if exists prospect_lists_insert on public.prospect_lists;
-create policy prospect_lists_insert on public.prospect_lists
-  for insert with check (owner_id = (select auth.uid()));
-
-drop policy if exists prospect_lists_update on public.prospect_lists;
-create policy prospect_lists_update on public.prospect_lists
-  for update using (
-    owner_id = (select auth.uid())
-    or exists (
-      select 1 from public.collaboration_members cm
-      where cm.resource_type = 'prospect_list'
-        and cm.resource_id = prospect_lists.id
-        and cm.user_id = (select auth.uid())
-        and cm.role = 'editor'
-    )
-  );
-
-drop policy if exists prospect_lists_delete on public.prospect_lists;
-create policy prospect_lists_delete on public.prospect_lists
-  for delete using (owner_id = (select auth.uid()));
-
--- --- Miembros e invitaciones -------------------------------------------------
+-- --- Miembros / invitaciones: solo tablas (las políticas de carpetas/listas las referencian) ---
 
 create table if not exists public.collaboration_members (
   id uuid primary key default gen_random_uuid(),
@@ -278,6 +109,184 @@ create unique index if not exists collaboration_invites_pending_unique
   on public.collaboration_invites (resource_type, resource_id, invitee_email)
   where status = 'pending';
 
+-- Consultas a collaboration_members desde políticas RLS: usar SECURITY DEFINER para evitar recursión infinita.
+
+create or replace function public.collab_user_is_member(p_resource_type text, p_resource_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.collaboration_members cm
+    where cm.resource_type = p_resource_type
+      and cm.resource_id = p_resource_id
+      and cm.user_id = p_user_id
+  );
+$$;
+
+create or replace function public.collab_member_has_editor_role(p_resource_type text, p_resource_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.collaboration_members cm
+    where cm.resource_type = p_resource_type
+      and cm.resource_id = p_resource_id
+      and cm.user_id = p_user_id
+      and cm.role = 'editor'
+  );
+$$;
+
+revoke all on function public.collab_user_is_member(text, uuid, uuid) from public;
+grant execute on function public.collab_user_is_member(text, uuid, uuid) to authenticated;
+
+revoke all on function public.collab_member_has_editor_role(text, uuid, uuid) from public;
+grant execute on function public.collab_member_has_editor_role(text, uuid, uuid) to authenticated;
+
+-- --- Carpetas y listas (tablas; prospect_lists debe existir antes de collab_resource_owned_by_user)
+
+create table if not exists public.search_folders (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists search_folders_owner_idx on public.search_folders (owner_id, updated_at desc);
+
+create table if not exists public.search_folder_items (
+  folder_id uuid not null references public.search_folders (id) on delete cascade,
+  prospect_search_id uuid not null references public.prospect_searches (id) on delete cascade,
+  added_by uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (folder_id, prospect_search_id)
+);
+
+create index if not exists search_folder_items_search_idx on public.search_folder_items (prospect_search_id);
+
+create table if not exists public.prospect_lists (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists prospect_lists_owner_idx on public.prospect_lists (owner_id, updated_at desc);
+
+alter table public.client_prospects
+  add column if not exists prospect_list_id uuid references public.prospect_lists (id) on delete set null;
+
+create or replace function public.collab_resource_owned_by_user(p_resource_type text, p_resource_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select case p_resource_type
+    when 'search_folder' then exists (
+      select 1 from public.search_folders sf
+      where sf.id = p_resource_id and sf.owner_id = p_user_id
+    )
+    when 'prospect_search' then exists (
+      select 1 from public.prospect_searches ps
+      where ps.id = p_resource_id and ps.user_id = p_user_id
+    )
+    when 'prospect_list' then exists (
+      select 1 from public.prospect_lists pl
+      where pl.id = p_resource_id and pl.owner_id = p_user_id
+    )
+    else false
+  end;
+$$;
+
+revoke all on function public.collab_resource_owned_by_user(text, uuid, uuid) from public;
+grant execute on function public.collab_resource_owned_by_user(text, uuid, uuid) to authenticated;
+
+alter table public.search_folders enable row level security;
+alter table public.search_folder_items enable row level security;
+alter table public.prospect_lists enable row level security;
+
+drop policy if exists search_folders_select on public.search_folders;
+create policy search_folders_select on public.search_folders
+  for select using (
+    owner_id = (select auth.uid())
+    or public.collab_user_is_member('search_folder', search_folders.id, (select auth.uid()))
+  );
+
+drop policy if exists search_folders_insert on public.search_folders;
+create policy search_folders_insert on public.search_folders
+  for insert with check (owner_id = (select auth.uid()));
+
+drop policy if exists search_folders_update on public.search_folders;
+create policy search_folders_update on public.search_folders
+  for update using (
+    owner_id = (select auth.uid())
+    or public.collab_member_has_editor_role('search_folder', search_folders.id, (select auth.uid()))
+  );
+
+drop policy if exists search_folders_delete on public.search_folders;
+create policy search_folders_delete on public.search_folders
+  for delete using (owner_id = (select auth.uid()));
+
+drop policy if exists search_folder_items_select on public.search_folder_items;
+create policy search_folder_items_select on public.search_folder_items
+  for select using (
+    public.collab_resource_owned_by_user('search_folder', search_folder_items.folder_id, (select auth.uid()))
+    or public.collab_user_is_member('search_folder', search_folder_items.folder_id, (select auth.uid()))
+  );
+
+drop policy if exists search_folder_items_insert on public.search_folder_items;
+create policy search_folder_items_insert on public.search_folder_items
+  for insert with check (
+    added_by = (select auth.uid())
+    and public.collab_resource_owned_by_user('prospect_search', prospect_search_id, (select auth.uid()))
+    and (
+      public.collab_resource_owned_by_user('search_folder', folder_id, (select auth.uid()))
+      or public.collab_member_has_editor_role('search_folder', folder_id, (select auth.uid()))
+    )
+  );
+
+drop policy if exists search_folder_items_delete on public.search_folder_items;
+create policy search_folder_items_delete on public.search_folder_items
+  for delete using (
+    public.collab_resource_owned_by_user('search_folder', search_folder_items.folder_id, (select auth.uid()))
+    or public.collab_member_has_editor_role('search_folder', search_folder_items.folder_id, (select auth.uid()))
+  );
+
+-- --- Políticas listas prospectos ---------------------------------------------
+
+drop policy if exists prospect_lists_select on public.prospect_lists;
+create policy prospect_lists_select on public.prospect_lists
+  for select using (
+    owner_id = (select auth.uid())
+    or public.collab_user_is_member('prospect_list', prospect_lists.id, (select auth.uid()))
+  );
+
+drop policy if exists prospect_lists_insert on public.prospect_lists;
+create policy prospect_lists_insert on public.prospect_lists
+  for insert with check (owner_id = (select auth.uid()));
+
+drop policy if exists prospect_lists_update on public.prospect_lists;
+create policy prospect_lists_update on public.prospect_lists
+  for update using (
+    owner_id = (select auth.uid())
+    or public.collab_member_has_editor_role('prospect_list', prospect_lists.id, (select auth.uid()))
+  );
+
+drop policy if exists prospect_lists_delete on public.prospect_lists;
+create policy prospect_lists_delete on public.prospect_lists
+  for delete using (owner_id = (select auth.uid()));
+
 alter table public.collaboration_members enable row level security;
 alter table public.collaboration_invites enable row level security;
 
@@ -286,63 +295,15 @@ create policy collaboration_members_select on public.collaboration_members
   for select using (
     user_id = (select auth.uid())
     or invited_by = (select auth.uid())
-    or exists (
-      select 1 from public.collaboration_members cm2
-      where cm2.resource_type = collaboration_members.resource_type
-        and cm2.resource_id = collaboration_members.resource_id
-        and cm2.user_id = (select auth.uid())
-    )
-    or (
-      collaboration_members.resource_type = 'search_folder'
-      and exists (
-        select 1 from public.search_folders sf
-        where sf.id = collaboration_members.resource_id
-          and sf.owner_id = (select auth.uid())
-      )
-    )
-    or (
-      collaboration_members.resource_type = 'prospect_search'
-      and exists (
-        select 1 from public.prospect_searches ps
-        where ps.id = collaboration_members.resource_id
-          and ps.user_id = (select auth.uid())
-      )
-    )
-    or (
-      collaboration_members.resource_type = 'prospect_list'
-      and exists (
-        select 1 from public.prospect_lists pl
-        where pl.id = collaboration_members.resource_id
-          and pl.owner_id = (select auth.uid())
-      )
-    )
+    or public.collab_user_is_member(collaboration_members.resource_type, collaboration_members.resource_id, (select auth.uid()))
+    or public.collab_resource_owned_by_user(collaboration_members.resource_type, collaboration_members.resource_id, (select auth.uid()))
   );
 
 drop policy if exists collaboration_members_delete on public.collaboration_members;
 create policy collaboration_members_delete on public.collaboration_members
   for delete using (
     user_id = (select auth.uid())
-    or (
-      resource_type = 'search_folder'
-      and exists (
-        select 1 from public.search_folders sf
-        where sf.id = resource_id and sf.owner_id = (select auth.uid())
-      )
-    )
-    or (
-      resource_type = 'prospect_search'
-      and exists (
-        select 1 from public.prospect_searches ps
-        where ps.id = resource_id and ps.user_id = (select auth.uid())
-      )
-    )
-    or (
-      resource_type = 'prospect_list'
-      and exists (
-        select 1 from public.prospect_lists pl
-        where pl.id = resource_id and pl.owner_id = (select auth.uid())
-      )
-    )
+    or public.collab_resource_owned_by_user(resource_type, resource_id, (select auth.uid()))
   );
 
 drop policy if exists collaboration_invites_select on public.collaboration_invites;
@@ -365,37 +326,8 @@ create policy collaboration_invites_insert on public.collaboration_invites
       select 1 from public.profiles inv where inv.id = (select auth.uid())
     )
     and (
-      exists (
-        select 1 from public.collaboration_members cm
-        where cm.resource_type = collaboration_invites.resource_type
-          and cm.resource_id = collaboration_invites.resource_id
-          and cm.user_id = (select auth.uid())
-          and cm.role = 'editor'
-      )
-      or (
-        collaboration_invites.resource_type = 'search_folder'
-        and exists (
-          select 1 from public.search_folders sf
-          where sf.id = collaboration_invites.resource_id
-            and sf.owner_id = (select auth.uid())
-        )
-      )
-      or (
-        collaboration_invites.resource_type = 'prospect_search'
-        and exists (
-          select 1 from public.prospect_searches ps
-          where ps.id = collaboration_invites.resource_id
-            and ps.user_id = (select auth.uid())
-        )
-      )
-      or (
-        collaboration_invites.resource_type = 'prospect_list'
-        and exists (
-          select 1 from public.prospect_lists pl
-          where pl.id = collaboration_invites.resource_id
-            and pl.owner_id = (select auth.uid())
-        )
-      )
+      public.collab_member_has_editor_role(collaboration_invites.resource_type, collaboration_invites.resource_id, (select auth.uid()))
+      or public.collab_resource_owned_by_user(collaboration_invites.resource_type, collaboration_invites.resource_id, (select auth.uid()))
     )
   );
 
@@ -445,18 +377,10 @@ create policy prospect_searches_select on public.prospect_searches
     user_id = (select auth.uid())
     or exists (
       select 1 from public.search_folder_items sfi
-      inner join public.collaboration_members cm
-        on cm.resource_type = 'search_folder'
-        and cm.resource_id = sfi.folder_id
-        and cm.user_id = (select auth.uid())
       where sfi.prospect_search_id = prospect_searches.id
+        and public.collab_user_is_member('search_folder', sfi.folder_id, (select auth.uid()))
     )
-    or exists (
-      select 1 from public.collaboration_members cm
-      where cm.resource_type = 'prospect_search'
-        and cm.resource_id = prospect_searches.id
-        and cm.user_id = (select auth.uid())
-    )
+    or public.collab_user_is_member('prospect_search', prospect_searches.id, (select auth.uid()))
   );
 
 drop policy if exists client_prospects_select_own on public.client_prospects;
@@ -466,12 +390,7 @@ create policy client_prospects_select on public.client_prospects
     user_id = (select auth.uid())
     or (
       prospect_list_id is not null
-      and exists (
-        select 1 from public.collaboration_members cm
-        where cm.resource_type = 'prospect_list'
-          and cm.resource_id = client_prospects.prospect_list_id
-          and cm.user_id = (select auth.uid())
-      )
+      and public.collab_user_is_member('prospect_list', client_prospects.prospect_list_id, (select auth.uid()))
     )
   );
 
@@ -487,13 +406,7 @@ create policy client_prospects_insert on public.client_prospects
         where pl.id = prospect_list_id
           and pl.owner_id = (select auth.uid())
       )
-      or exists (
-        select 1 from public.collaboration_members cm
-        where cm.resource_type = 'prospect_list'
-          and cm.resource_id = prospect_list_id
-          and cm.user_id = (select auth.uid())
-          and cm.role = 'editor'
-      )
+      or public.collab_member_has_editor_role('prospect_list', prospect_list_id, (select auth.uid()))
     )
   );
 
@@ -504,13 +417,7 @@ create policy client_prospects_update on public.client_prospects
     user_id = (select auth.uid())
     or (
       prospect_list_id is not null
-      and exists (
-        select 1 from public.collaboration_members cm
-        where cm.resource_type = 'prospect_list'
-          and cm.resource_id = prospect_list_id
-          and cm.user_id = (select auth.uid())
-          and cm.role = 'editor'
-      )
+      and public.collab_member_has_editor_role('prospect_list', prospect_list_id, (select auth.uid()))
     )
   );
 
@@ -521,13 +428,7 @@ create policy client_prospects_delete on public.client_prospects
     user_id = (select auth.uid())
     or (
       prospect_list_id is not null
-      and exists (
-        select 1 from public.collaboration_members cm
-        where cm.resource_type = 'prospect_list'
-          and cm.resource_id = prospect_list_id
-          and cm.user_id = (select auth.uid())
-          and cm.role = 'editor'
-      )
+      and public.collab_member_has_editor_role('prospect_list', prospect_list_id, (select auth.uid()))
     )
   );
 

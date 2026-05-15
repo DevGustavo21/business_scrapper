@@ -12,6 +12,7 @@ import {
 } from '@/lib/supabase/collaboration'
 import {
   countUnreadNotifications,
+  deleteMyNotification,
   listMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -81,17 +82,31 @@ export function NotificationsPopover() {
 
   if (!loggedIn) return null
 
+  const dismissInviteNotification = async (notificationId: string) => {
+    setItems(prev => prev.filter(x => x.id !== notificationId))
+    const sb = createBrowserSupabaseClient()
+    const { error: delErr } = await deleteMyNotification(sb, notificationId)
+    if (delErr) {
+      await markNotificationRead(sb, notificationId)
+    }
+    await refresh()
+  }
+
   const handleAcceptInvite = async (inviteId: string, notificationId: string) => {
     setBusyId(inviteId)
     const sb = createBrowserSupabaseClient()
     const { ok, error } = await acceptCollaborationInviteRpc(sb, inviteId)
     setBusyId(null)
-    if (!ok || error) {
-      window.alert(error?.message ?? 'No se pudo aceptar.')
+    if (ok && !error) {
+      await dismissInviteNotification(notificationId)
       return
     }
-    await markNotificationRead(sb, notificationId)
-    await refresh()
+    const msg = error?.message ?? ''
+    if (/not_pending|not_found|wrong_user|email_mismatch/i.test(msg)) {
+      await dismissInviteNotification(notificationId)
+      return
+    }
+    window.alert(msg || 'No se pudo aceptar.')
   }
 
   const handleDeclineInvite = async (inviteId: string, notificationId: string) => {
@@ -99,12 +114,16 @@ export function NotificationsPopover() {
     const sb = createBrowserSupabaseClient()
     const { ok, error } = await declineCollaborationInviteRpc(sb, inviteId)
     setBusyId(null)
-    if (!ok || error) {
-      window.alert(error?.message ?? 'No se pudo rechazar.')
+    if (ok && !error) {
+      await dismissInviteNotification(notificationId)
       return
     }
-    await markNotificationRead(sb, notificationId)
-    await refresh()
+    const msg = error?.message ?? ''
+    if (/not_pending|not_found|wrong_user|email_mismatch/i.test(msg)) {
+      await dismissInviteNotification(notificationId)
+      return
+    }
+    window.alert(msg || 'No se pudo rechazar.')
   }
 
   const handleMarkRead = async (id: string) => {
@@ -144,9 +163,17 @@ export function NotificationsPopover() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(92vw,380px)] max-h-[min(70vh,420px)] overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800 bg-[--color-background] shadow-xl z-[80] flex flex-col">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-neutral-200 dark:border-neutral-800">
-            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Notificaciones</span>
+        <div
+          className={cn(
+            'absolute right-0 mt-2 w-[min(92vw,380px)] max-h-[min(70vh,420px)] overflow-hidden rounded-xl z-[80] flex flex-col',
+            'border border-neutral-200 dark:border-zinc-600',
+            'bg-[#ffffff] dark:bg-[#18181b]',
+            'ring-1 ring-black/[0.06] dark:ring-white/[0.08]',
+            'shadow-2xl shadow-black/20 dark:shadow-black/50',
+          )}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2.5 border-b border-neutral-200 dark:border-zinc-700 bg-[#f5f5f5] dark:bg-[#27272a]">
+            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-800 dark:text-zinc-100">Notificaciones</span>
             <div className="flex gap-2">
               <Link
                 href="/compartido"
@@ -155,14 +182,18 @@ export function NotificationsPopover() {
               >
                 Invitaciones
               </Link>
-              <button type="button" className="text-[11px] text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200" onClick={handleMarkAll}>
+              <button
+                type="button"
+                className="text-[11px] font-medium text-neutral-600 dark:text-zinc-300 hover:text-neutral-900 dark:hover:text-white"
+                onClick={() => void handleMarkAll()}
+              >
                 Marcar leídas
               </button>
             </div>
           </div>
-          <div className="overflow-y-auto flex-1 p-2 flex flex-col gap-1">
+          <div className="overflow-y-auto flex-1 p-2.5 flex flex-col gap-2 bg-[#fafafa] dark:bg-[#18181b]">
             {items.length === 0 && (
-              <p className="text-xs text-neutral-500 px-2 py-6 text-center">No hay notificaciones recientes.</p>
+              <p className="text-xs text-neutral-700 dark:text-zinc-300 px-2 py-8 text-center">No hay notificaciones recientes.</p>
             )}
             {items.map(n => {
               const link = notificationLink(n)
@@ -172,24 +203,27 @@ export function NotificationsPopover() {
                 <div
                   key={n.id}
                   className={cn(
-                    'rounded-lg border px-3 py-2 text-xs flex flex-col gap-1.5',
+                    'rounded-lg border px-3 py-2.5 text-xs flex flex-col gap-1.5',
+                    'shadow-sm',
                     unreadDot
-                      ? 'border-indigo-200 dark:border-indigo-900 bg-indigo-50/80 dark:bg-indigo-950/30'
-                      : 'border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40',
+                      ? 'border-indigo-300 dark:border-indigo-600 bg-[#eef2ff] dark:bg-[#1e1b4b] dark:ring-1 dark:ring-indigo-900/80'
+                      : 'border-neutral-200 dark:border-zinc-600 bg-[#ffffff] dark:bg-[#27272a]',
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-neutral-900 dark:text-neutral-100 leading-snug">{n.title}</span>
-                    <span className="shrink-0 text-[10px] text-neutral-400">{formatWhen(n.created_at)}</span>
+                    <span className="font-semibold text-neutral-900 dark:text-zinc-50 leading-snug">{n.title}</span>
+                    <span className="shrink-0 text-[10px] text-neutral-600 dark:text-zinc-400 tabular-nums">{formatWhen(n.created_at)}</span>
                   </div>
-                  {n.body && <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">{n.body}</p>}
+                  {n.body && (
+                    <p className="text-neutral-800 dark:text-zinc-200 leading-relaxed text-[11px]">{n.body}</p>
+                  )}
                   <div className="flex flex-wrap gap-2 pt-0.5">
                     {inviteId && (
                       <>
                         <button
                           type="button"
                           disabled={busyId === inviteId}
-                          className="px-2 py-1 rounded-md bg-indigo-600 text-white text-[11px] font-medium disabled:opacity-50"
+                          className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-[11px] font-medium hover:bg-indigo-700 disabled:opacity-50"
                           onClick={() => void handleAcceptInvite(inviteId, n.id)}
                         >
                           Aceptar
@@ -197,7 +231,7 @@ export function NotificationsPopover() {
                         <button
                           type="button"
                           disabled={busyId === inviteId}
-                          className="px-2 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 text-[11px] disabled:opacity-50"
+                          className="px-2.5 py-1 rounded-md border border-neutral-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-neutral-800 dark:text-zinc-200 text-[11px] font-medium hover:bg-neutral-50 dark:hover:bg-zinc-800 disabled:opacity-50"
                           onClick={() => void handleDeclineInvite(inviteId, n.id)}
                         >
                           Rechazar
@@ -214,7 +248,11 @@ export function NotificationsPopover() {
                       </Link>
                     )}
                     {!n.read_at && n.type !== 'collab_invite' && (
-                      <button type="button" className="text-[11px] text-neutral-500 hover:underline ml-auto" onClick={() => void handleMarkRead(n.id)}>
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-neutral-600 dark:text-zinc-400 hover:underline ml-auto"
+                        onClick={() => void handleMarkRead(n.id)}
+                      >
                         Marcar leída
                       </button>
                     )}
