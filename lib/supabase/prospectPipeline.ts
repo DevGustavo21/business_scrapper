@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { NegocioFila } from '@/types/business'
 import { normalizeSearchCategoryUbicacion, stableBusinessFingerprint } from '@/lib/businessDedupe'
+import {
+  fetchClientProspectById,
+  resetNoInteresadoToSinContactarForUserProspectsMatchingFingerprint,
+  updateClientProspectEstado,
+} from '@/lib/supabase/clientProspects'
+import { resetNoInteresadoToSinContactarInSearchesByFingerprint } from '@/lib/supabase/prospectSearches'
 
 export type ProspectBlacklistRow = {
   id: string
@@ -114,4 +120,33 @@ export async function removeProspectBlacklistById(
 ): Promise<{ error: Error | null }> {
   const { error } = await supabase.from('prospect_blacklist').delete().eq('id', id)
   return { error: error ? new Error(error.message) : null }
+}
+
+/**
+ * Tras quitar una fila de `prospect_blacklist`, alinea el estado de contacto en la app:
+ * `client_prospects` vinculado o con la misma huella (propios), y filas equivalentes en JSON de búsquedas.
+ */
+export async function syncContactEstadoAfterBlacklistRemoval(
+  supabase: SupabaseClient,
+  userId: string,
+  entry: Pick<ProspectBlacklistRow, 'fingerprint' | 'client_prospect_id'>,
+): Promise<{ error: Error | null }> {
+  const skipIds = new Set<string>()
+  if (entry.client_prospect_id) {
+    const { data: row, error: fErr } = await fetchClientProspectById(supabase, entry.client_prospect_id)
+    if (fErr) return { error: fErr }
+    if (row?.estado === 'No interesado') {
+      const { error: uErr } = await updateClientProspectEstado(supabase, entry.client_prospect_id, 'Sin contactar')
+      if (uErr) return { error: uErr }
+    }
+    skipIds.add(entry.client_prospect_id)
+  }
+  const { error: fpErr } = await resetNoInteresadoToSinContactarForUserProspectsMatchingFingerprint(
+    supabase,
+    userId,
+    entry.fingerprint,
+    skipIds,
+  )
+  if (fpErr) return { error: fpErr }
+  return resetNoInteresadoToSinContactarInSearchesByFingerprint(supabase, userId, entry.fingerprint)
 }

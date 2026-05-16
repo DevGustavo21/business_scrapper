@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { CollaborationResourceType, CollaborationRole } from '@/types/collaboration'
 import { insertCollaborationInvite, normalizeShareEmail } from '@/lib/supabase/collaboration'
@@ -28,6 +28,10 @@ export function ShareResourceDialog({
   const [role, setRole] = useState<CollaborationRole>('viewer')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) setRole(resourceType === 'prospect_list' ? 'editor' : 'viewer')
+  }, [open, resourceType])
 
   if (!open) return null
 
@@ -106,6 +110,12 @@ export function ShareResourceDialog({
               <option value="viewer">Solo lectura</option>
               <option value="editor">Puede editar (añadir o quitar ítems)</option>
             </select>
+            {resourceType === 'prospect_list' && (
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                Con <strong>Solo lectura</strong> no pueden guardar prospectos en la lista; elige <strong>Puede editar</strong> si quieres
+                que añadan negocios visibles para todo el equipo.
+              </p>
+            )}
           </label>
           {msg && (
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2 bg-neutral-50 dark:bg-neutral-800/60">

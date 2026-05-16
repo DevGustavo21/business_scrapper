@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { stableBusinessFingerprint } from '@/lib/businessDedupe'
 import type { NegocioFila } from '@/types/business'
 import type { ClientProspectRow, ClientProspectSource } from '@/types/client-prospect'
 
@@ -274,6 +275,34 @@ export async function updateClientProspectEstado(
     .update({ estado, updated_at: new Date().toISOString() })
     .eq('id', prospectId)
   return { error: error ? new Error(error.message) : null }
+}
+
+/** Solo filas en «No interesado» que coincidan en huella (p. ej. al quitar de lista negra). */
+export async function resetNoInteresadoToSinContactarForUserProspectsMatchingFingerprint(
+  supabase: SupabaseClient,
+  userId: string,
+  fingerprint: string,
+  skipIds?: Set<string>,
+): Promise<{ error: Error | null }> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('id, nombre, telefono, correo, direccion, estado')
+    .eq('user_id', userId)
+    .eq('estado', 'No interesado')
+  if (error) return { error: new Error(error.message) }
+  for (const r of data ?? []) {
+    if (skipIds?.has(r.id)) continue
+    const fp = stableBusinessFingerprint({
+      nombre: r.nombre,
+      telefono: r.telefono,
+      correo: r.correo,
+      direccion: r.direccion,
+    })
+    if (fp !== fingerprint) continue
+    const { error: uErr } = await updateClientProspectEstado(supabase, r.id, 'Sin contactar')
+    if (uErr) return { error: uErr }
+  }
+  return { error: null }
 }
 
 export async function updateClientProspectListId(

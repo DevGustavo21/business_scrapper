@@ -32,6 +32,7 @@ function PerfilInner() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
@@ -43,6 +44,7 @@ function PerfilInner() {
     }
     setLoading(true)
     setError(null)
+    setSuccessMessage(null)
     const sb = createBrowserSupabaseClient()
     const { data, error: e } = await fetchMyProfile(sb, user.id)
     if (e) setError(e.message)
@@ -82,6 +84,7 @@ function PerfilInner() {
     if (!user || !isSupabaseConfigured()) return
     setSaving(true)
     setError(null)
+    setSuccessMessage(null)
     const sb = createBrowserSupabaseClient()
     let nextAvatar = avatarUrl
     if (pendingFile) {
@@ -108,6 +111,7 @@ function PerfilInner() {
     setPendingFile(null)
     setAvatarUrl(nextAvatar)
     await load()
+    setSuccessMessage('Tu perfil se actualizó correctamente.')
   }
 
   const clearPhoto = async () => {
@@ -125,7 +129,10 @@ function PerfilInner() {
       avatar_url: null,
     })
     if (uErr) setError(uErr.message)
-    else await load()
+    else {
+      setSuccessMessage('Foto de perfil eliminada. Los demás datos se mantienen guardados.')
+      await load()
+    }
   }
 
   return (
@@ -183,6 +190,7 @@ function PerfilInner() {
                     onChange={e => {
                       const f = e.target.files?.[0]
                       if (f && f.size > 5 * 1024 * 1024) {
+                        setSuccessMessage(null)
                         setError('La imagen no debe superar 5 MB.')
                         return
                       }
@@ -255,7 +263,10 @@ function PerfilInner() {
           </form>
         )}
       </main>
-      {error && <Toast message={error} onClose={() => setError(null)} />}
+      {error && <Toast message={error} variant="error" onClose={() => setError(null)} />}
+      {successMessage && (
+        <Toast message={successMessage} variant="success" onClose={() => setSuccessMessage(null)} />
+      )}
     </div>
   )
 }

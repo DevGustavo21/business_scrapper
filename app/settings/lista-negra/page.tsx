@@ -7,8 +7,12 @@ import { Toast } from '@/components/Toast'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
-import { listProspectBlacklist, removeProspectBlacklistById, type ProspectBlacklistRow } from '@/lib/supabase/prospectPipeline'
-import { updateClientProspectEstado } from '@/lib/supabase/clientProspects'
+import {
+  listProspectBlacklist,
+  removeProspectBlacklistById,
+  syncContactEstadoAfterBlacklistRemoval,
+  type ProspectBlacklistRow,
+} from '@/lib/supabase/prospectPipeline'
 
 function ListaNegraInner() {
   const user = useSupabaseUser()
@@ -49,9 +53,11 @@ function ListaNegraInner() {
       setError(dErr.message)
       return
     }
-    if (r.client_prospect_id) {
-      await updateClientProspectEstado(sb, r.client_prospect_id, 'Sin contactar')
-    }
+    const { error: syncErr } = await syncContactEstadoAfterBlacklistRemoval(sb, user.id, {
+      fingerprint: r.fingerprint,
+      client_prospect_id: r.client_prospect_id,
+    })
+    if (syncErr) setError(syncErr.message)
     await load()
   }
 
