@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
@@ -18,12 +18,18 @@ import {
   formatClientProspectError,
 } from '@/lib/supabase/clientProspects'
 import { listProspectListsForUser } from '@/lib/supabase/collaboration'
+import { stableBusinessFingerprint } from '@/lib/businessDedupe'
+import {
+  upsertProspectBlacklist,
+  removeProspectBlacklistByFingerprint,
+} from '@/lib/supabase/prospectPipeline'
 import type { ContactoEstado, NegocioFila } from '@/types/business'
 import type { ClientProspectRow } from '@/types/client-prospect'
 import type { ProspectListRow } from '@/types/collaboration'
 
 function ClientesProspectosInner() {
   const user = useSupabaseUser()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const listaFromUrl = searchParams.get('lista')
 
@@ -36,8 +42,10 @@ function ClientesProspectosInner() {
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
   useEffect(() => {
-    if (listaFromUrl) setListFilter(listaFromUrl)
-  }, [listaFromUrl])
+    if (listaFromUrl) {
+      router.replace(`/lista/${encodeURIComponent(listaFromUrl)}`)
+    }
+  }, [listaFromUrl, router])
 
   const load = useCallback(async () => {
     if (!user || !isSupabaseConfigured()) {
@@ -95,10 +103,26 @@ function ClientesProspectosInner() {
 
   const handleEstadoChange = async (id: string, estado: ContactoEstado) => {
     if (!user || !isSupabaseConfigured()) return
+    const prevRow = rows.find(r => r.id === id)
+    const prevEstado = prevRow?.estado as ContactoEstado | undefined
     const sb = createBrowserSupabaseClient()
     const { error: uErr } = await updateClientProspectEstado(sb, id, estado)
     if (uErr) setError(formatClientProspectError(uErr.message))
-    else await load()
+    else setError(null)
+    if (prevRow && prevEstado !== estado) {
+      const fp = stableBusinessFingerprint({
+        nombre: prevRow.nombre,
+        telefono: prevRow.telefono,
+        correo: prevRow.correo,
+        direccion: prevRow.direccion,
+      })
+      if (estado === 'No interesado') {
+        await upsertProspectBlacklist(sb, user.id, fp, prevRow.nombre, id)
+      } else if (prevEstado === 'No interesado') {
+        await removeProspectBlacklistByFingerprint(sb, user.id, fp)
+      }
+    }
+    await load()
   }
 
   const filterHint =
@@ -123,9 +147,9 @@ function ClientesProspectosInner() {
             <Link href="/agregar-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
               Agregar prospectos
             </Link>
-            . Gestiona listas compartidas en{' '}
-            <Link href="/listas-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
-              Listas
+            . Las listas compartidas se crean o eligen al dar «me gusta» a un resultado en la{' '}
+            <Link href="/" className="text-indigo-600 dark:text-indigo-400 font-medium">
+              búsqueda
             </Link>
             .
           </p>
@@ -174,6 +198,7 @@ function ClientesProspectosInner() {
           onEstadoChange={handleEstadoChange}
           summaryMode="list"
           showOrigenColumn
+          detailHref={row => `/prospecto/${encodeURIComponent(row.id)}`}
           deleteRow={
             loggedIn
               ? {

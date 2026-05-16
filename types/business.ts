@@ -5,6 +5,7 @@ export const CONTACTO_ESTADOS = [
   'Reunion acordada',
   'Contrato Activo',
   'Proyecto Entregado',
+  'No interesado',
 ] as const
 
 export type ContactoEstado = (typeof CONTACTO_ESTADOS)[number]
@@ -41,6 +42,8 @@ export interface ScrapeRequest {
   categoria: string
   ubicacion: string
   cantidad: number
+  /** Huellas `stableBusinessFingerprint` a excluir (lista negra + ya mostrados en mismo rubro/ubicación). */
+  excludeFingerprints?: string[]
 }
 
 export interface ScrapeResponse {

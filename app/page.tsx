@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { cn } from '@/lib/utils'
 import { SearchPanel } from '@/components/SearchPanel'
@@ -42,8 +42,15 @@ import { SCRAPE_MAX_MS, type ScrapeStreamDone, type ContactoEstado, type Negocio
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 import type { ProspectListRow } from '@/types/collaboration'
 import { listProspectListsForUser } from '@/lib/supabase/collaboration'
-
-const BP_LIST_STORAGE_KEY = 'bp_selected_prospect_list_id'
+import {
+  fetchExcludeFingerprintsForSearch,
+  removeProspectBlacklistByFingerprint,
+  replaceSearchResultFingerprints,
+  upsertProspectBlacklist,
+} from '@/lib/supabase/prospectPipeline'
+import { stableBusinessFingerprint } from '@/lib/businessDedupe'
+import { normalizeNegocios } from '@/lib/negociosRows'
+import { MarkProspectDialog, type MarkProspectDest, loadProspectListsForMark } from '@/components/MarkProspectDialog'
 
 function parseSseBlocks(buffer: string, onBlock: (event: string, data: string) => void): string {
   const normalized = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -62,22 +69,9 @@ function parseSseBlocks(buffer: string, onBlock: (event: string, data: string) =
   return rest
 }
 
-function normalizeNegocios(raw: unknown): NegocioFila[] {
-  if (!Array.isArray(raw)) return []
-  return raw.map((n, i) => {
-    const o = n as Partial<NegocioFila>
-    const id =
-      typeof o.id === 'string' && o.id
-        ? o.id
-        : typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `row-${i}-${Date.now()}`
-    return { ...(o as Negocio), id }
-  })
-}
-
 function HomeInner() {
   const user = useSupabaseUser()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const urlSearchId = searchParams.get('search')
   const [negocios, setNegocios] = useState<NegocioFila[]>([])
@@ -98,25 +92,11 @@ function HomeInner() {
   const [shareSearchOpen, setShareSearchOpen] = useState(false)
   const [addFolderOpen, setAddFolderOpen] = useState(false)
   const [prospectLists, setProspectLists] = useState<ProspectListRow[]>([])
-  const [selectedProspectListId, setSelectedProspectListId] = useState<string | null>(null)
-
-  useEffect(() => {
-    try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(BP_LIST_STORAGE_KEY) : null
-      setSelectedProspectListId(raw)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
-  useEffect(() => {
-    try {
-      if (selectedProspectListId) localStorage.setItem(BP_LIST_STORAGE_KEY, selectedProspectListId)
-      else localStorage.removeItem(BP_LIST_STORAGE_KEY)
-    } catch {
-      /* ignore */
-    }
-  }, [selectedProspectListId])
+  const [markDialogOpen, setMarkDialogOpen] = useState(false)
+  const [markRow, setMarkRow] = useState<NegocioFila | null>(null)
+  const [shareNewListOpen, setShareNewListOpen] = useState(false)
+  const [shareNewListId, setShareNewListId] = useState<string | null>(null)
+  const [shareNewListTitle, setShareNewListTitle] = useState('')
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured()) {
@@ -126,6 +106,12 @@ function HomeInner() {
     const sb = createBrowserSupabaseClient()
     void listProspectListsForUser(sb, user.id).then(({ data }) => setProspectLists(data))
   }, [user])
+
+  useEffect(() => {
+    if (markDialogOpen && user && isSupabaseConfigured()) {
+      void loadProspectListsForMark(createBrowserSupabaseClient(), user.id).then(setProspectLists)
+    }
+  }, [markDialogOpen, user])
 
   useEffect(() => {
     negociosRef.current = negocios
@@ -141,7 +127,7 @@ function HomeInner() {
       return []
     }
     const sb = createBrowserSupabaseClient()
-    const { data, error: err } = await listProspectSearches(sb)
+    const { data, error: err } = await listProspectSearches(sb, user.id)
     if (err) {
       console.warn('[history]', err.message)
       return []
@@ -160,6 +146,10 @@ function HomeInner() {
         setError(err?.message ?? 'No se pudo cargar la búsqueda.')
         return
       }
+      if (data.user_id !== user.id) {
+        router.replace(`/busqueda-compartida/${encodeURIComponent(id)}`)
+        return
+      }
       setError(null)
       setActiveSearchId(id)
       writeStoredActiveSearchId(id)
@@ -170,7 +160,7 @@ function HomeInner() {
       setLastSearch({ categoria: data.categoria, ubicacion: data.ubicacion })
       setRequestedQty(data.cantidad_solicitada)
     },
-    [user],
+    [user, router],
   )
 
   useEffect(() => {
@@ -184,11 +174,13 @@ function HomeInner() {
     }
     void (async () => {
       const items = await refreshHistory()
-      const urlPick = urlSearchId && items.some(x => x.id === urlSearchId) ? urlSearchId : null
+      if (urlSearchId) {
+        await loadSearchById(urlSearchId)
+        return
+      }
       const stored = readStoredActiveSearchId()
       const storedPick = stored && items.some(x => x.id === stored) ? stored : null
-      const pick = urlPick ?? storedPick
-      if (pick) await loadSearchById(pick)
+      if (storedPick) await loadSearchById(storedPick)
     })()
   }, [user, refreshHistory, loadSearchById, urlSearchId])
 
@@ -227,6 +219,8 @@ function HomeInner() {
 
   const handleEstadoChange = useCallback(
     (id: string, estado: ContactoEstado) => {
+      const prevRow = negociosRef.current.find(r => r.id === id)
+      const prevEstado = prevRow?.estado
       setNegocios(prev => {
         const next = prev.map(r => (r.id === id ? { ...r, estado } : r))
         const row = next.find(r => r.id === id)
@@ -241,6 +235,15 @@ function HomeInner() {
         }
         return next
       })
+      if (user && isSupabaseConfigured() && prevRow && prevEstado !== estado) {
+        const fp = stableBusinessFingerprint(prevRow)
+        const sb = createBrowserSupabaseClient()
+        if (estado === 'No interesado') {
+          void upsertProspectBlacklist(sb, user.id, fp, prevRow.nombre, prevRow.prospectRecordId ?? null)
+        } else if (prevEstado === 'No interesado') {
+          void removeProspectBlacklistByFingerprint(sb, user.id, fp)
+        }
+      }
     },
     [user],
   )
@@ -260,6 +263,31 @@ function HomeInner() {
       void updateProspectSearchProgress(createBrowserSupabaseClient(), persistId, negociosRef.current)
     }, 800)
   }, [user])
+
+  const confirmMarkProspect = useCallback(
+    async (dest: MarkProspectDest) => {
+      if (!user || !isSupabaseConfigured()) return
+      const sid = activeSearchIdRef.current
+      const row = markRow
+      if (!sid || !row) return
+      const listId = dest.kind === 'personal' ? null : dest.listId
+      const sb = createBrowserSupabaseClient()
+      const { id: pid, error: insErr } = await insertProspectFromSearch(sb, user.id, sid, row, listId)
+      if (insErr || !pid) {
+        setError(formatClientProspectError(insErr?.message))
+        return
+      }
+      setNegocios(prev => prev.map(r => (r.id === row.id ? { ...r, esProspecto: true, prospectRecordId: pid } : r)))
+      scheduleCloudPersist(sid)
+      setMarkRow(null)
+      if (dest.kind === 'shared_new') {
+        setShareNewListId(dest.listId)
+        setShareNewListTitle(dest.name)
+        setShareNewListOpen(true)
+      }
+    },
+    [user, markRow, scheduleCloudPersist],
+  )
 
   const handleProspectToggle = useCallback(
     async (row: NegocioFila) => {
@@ -283,24 +311,13 @@ function HomeInner() {
           prev.map(r => (r.id === row.id ? { ...r, esProspecto: false, prospectRecordId: null } : r)),
         )
       } else {
-        const { id: pid, error: insErr } = await insertProspectFromSearch(
-          sb,
-          user.id,
-          sid,
-          row,
-          selectedProspectListId || null,
-        )
-        if (insErr || !pid) {
-          setError(formatClientProspectError(insErr?.message))
-          return
-        }
-        setNegocios(prev =>
-          prev.map(r => (r.id === row.id ? { ...r, esProspecto: true, prospectRecordId: pid } : r)),
-        )
+        setMarkRow(row)
+        setMarkDialogOpen(true)
+        return
       }
       scheduleCloudPersist(sid)
     },
-    [user, scheduleCloudPersist, selectedProspectListId],
+    [user, scheduleCloudPersist],
   )
 
   const handleDeleteNegocioRow = useCallback(
@@ -362,6 +379,13 @@ function HomeInner() {
         }
       }
 
+      let excludeFingerprints: string[] = []
+      if (user && isSupabaseConfigured()) {
+        const sbEx = createBrowserSupabaseClient()
+        const ex = await fetchExcludeFingerprintsForSearch(sbEx, user.id, categoria, ubicacion)
+        if (!ex.error) excludeFingerprints = ex.keys
+      }
+
       const ctrl = new AbortController()
       const clientMaxMs = SCRAPE_MAX_MS + 90_000
       const tid = window.setTimeout(() => ctrl.abort(), clientMaxMs)
@@ -399,7 +423,7 @@ function HomeInner() {
         const res = await fetch('/api/scrape/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-          body: JSON.stringify({ categoria, ubicacion, cantidad }),
+          body: JSON.stringify({ categoria, ubicacion, cantidad, excludeFingerprints }),
           signal: ctrl.signal,
         })
         if (!res.ok) {
@@ -482,6 +506,15 @@ function HomeInner() {
             } else {
               await completeProspectSearch(sb, persistId, streamRows, { reason: 'timeout' })
             }
+            const { error: fpErr } = await replaceSearchResultFingerprints(
+              sb,
+              user.id,
+              persistId,
+              categoria,
+              ubicacion,
+              streamRows,
+            )
+            if (fpErr) console.warn('[fingerprints]', fpErr.message)
             await refreshHistory()
           }
 
@@ -542,6 +575,14 @@ function HomeInner() {
             mobileHistoryOpen ? 'max-sm:translate-x-0' : 'max-sm:-translate-x-full',
             'sm:translate-x-0',
           )}
+          sidebarFooter={
+            <Link
+              href="/settings/lista-negra"
+              className="block w-full text-center text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/80"
+            >
+              Configuración
+            </Link>
+          }
         />
 
         <main className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
@@ -550,8 +591,8 @@ function HomeInner() {
               Prospecta negocios en segundos
             </h1>
             <p className="text-neutral-500 dark:text-neutral-400 max-w-lg text-sm sm:text-base">
-              Cada búsqueda es un chat en el historial (si inicias sesión). Los datos se guardan en la nube y sobreviven a
-              recargar la página.
+              Cada búsqueda <strong>tuya</strong> queda en el historial lateral (con sesión iniciada). Lo que comparte un
+              compañero en una carpeta se abre en una vista aparte, no mezclada con tu historial.
             </p>
           </div>
           <SearchPanel onSearch={handleSearch} loading={loading} />
@@ -573,29 +614,11 @@ function HomeInner() {
           )}
           {loggedIn && activeSearchId && user && (
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-between items-stretch sm:items-center max-w-4xl mx-auto w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-950/40 px-4 py-3">
-              <label className="flex flex-col gap-1 text-xs font-medium text-neutral-700 dark:text-neutral-300 min-w-[200px]">
-                Lista al marcar prospectos
-                <select
-                  value={selectedProspectListId ?? ''}
-                  onChange={e => setSelectedProspectListId(e.target.value || null)}
-                  className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
-                >
-                  <option value="">Personal (sin lista)</option>
-                  {prospectLists.map(pl => (
-                    <option key={pl.id} value={pl.id}>
-                      {pl.name}
-                      {pl.owner_id !== user.id ? ' · compartida' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-md">
+                Al marcar con el corazón elige si va a tu <strong>lista personal</strong> o a una{' '}
+                <strong>lista compartida</strong> (nueva o existente).
+              </p>
               <div className="flex flex-wrap gap-2 items-center justify-end">
-                <Link
-                  href="/listas-prospectos"
-                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-2"
-                >
-                  Gestionar listas
-                </Link>
                 <button
                   type="button"
                   onClick={() => setShareSearchOpen(true)}
@@ -619,6 +642,9 @@ function HomeInner() {
             streamActive={loading && negocios.length > 0}
             requestedQty={requestedQty}
             onEstadoChange={handleEstadoChange}
+            detailHref={row =>
+              row.prospectRecordId ? `/prospecto/${encodeURIComponent(row.prospectRecordId)}` : null
+            }
             prospectHeart={
               loggedIn && activeSearchId
                 ? {
@@ -657,6 +683,36 @@ function HomeInner() {
           setSearchCompleteSummary(null)
         }}
       />
+
+      {loggedIn && user && (
+        <MarkProspectDialog
+          open={markDialogOpen}
+          onClose={() => {
+            setMarkDialogOpen(false)
+            setMarkRow(null)
+          }}
+          row={markRow}
+          userId={user.id}
+          lists={prospectLists}
+          onConfirm={confirmMarkProspect}
+        />
+      )}
+
+      {loggedIn && shareNewListOpen && shareNewListId && user && (
+        <ShareResourceDialog
+          open={shareNewListOpen}
+          onClose={() => {
+            setShareNewListOpen(false)
+            setShareNewListId(null)
+            setShareNewListTitle('')
+          }}
+          title={shareNewListTitle || 'Lista compartida'}
+          resourceType="prospect_list"
+          resourceId={shareNewListId}
+          inviterUserId={user.id}
+          inviterEmail={user.email ?? undefined}
+        />
+      )}
 
       {loggedIn && activeSearchId && user && (
         <>

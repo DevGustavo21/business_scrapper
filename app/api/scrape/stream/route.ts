@@ -28,6 +28,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   let categoria = ''
   let ubicacion = ''
   let qty = 12
+  let excludeFingerprints: string[] = []
   try {
     const body = (await req.json()) as ScrapeRequest
     categoria = body.categoria?.trim() ?? ''
@@ -35,6 +36,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (!categoria || !ubicacion)
       return NextResponse.json({ error: 'Categoría y ubicación son requeridos.' }, { status: 400 })
     qty = Math.max(1, Math.min(100, Number(body.cantidad) || 12))
+    const excludeRaw = body.excludeFingerprints
+    excludeFingerprints = Array.isArray(excludeRaw)
+      ? excludeRaw.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length < 500)
+      : []
   } catch {
     return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 })
   }
@@ -57,8 +62,13 @@ export async function POST(req: NextRequest): Promise<Response> {
             /* stream cerrado */
           }
         }, 12_000)
-        const { reason, total, requested } = await streamScrapeNegocios(categoria, ubicacion, qty, SCRAPE_MAX_MS, n =>
-          send('negocio', clipNegocioForSse(n)),
+        const { reason, total, requested } = await streamScrapeNegocios(
+          categoria,
+          ubicacion,
+          qty,
+          SCRAPE_MAX_MS,
+          n => send('negocio', clipNegocioForSse(n)),
+          excludeFingerprints.length > 0 ? excludeFingerprints : undefined,
         )
         const done: ScrapeStreamDone = { reason, total, requested }
         send('done', done)

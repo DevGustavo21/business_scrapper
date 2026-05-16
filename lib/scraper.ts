@@ -1,4 +1,5 @@
 import { chromium, type Browser, type Page } from 'playwright-core'
+import { stableBusinessFingerprint } from '@/lib/businessDedupe'
 import { type Negocio, SCRAPE_MAX_MS } from '@/types/business'
 
 /** SPAs como Maps casi nunca llegan a "networkidle". */
@@ -682,7 +683,9 @@ export function createScrapeEmit(
   cantidad: number,
   deadlineAt: number,
   onNegocio: (n: Negocio) => void,
+  opts?: { excludeBusinessKeys?: Set<string> },
 ): ScrapeEmit {
+  const excludeBiz = opts?.excludeBusinessKeys ?? new Set<string>()
   const seen = new Set<string>()
   let c = 0
   let deadline = deadlineAt
@@ -697,6 +700,8 @@ export function createScrapeEmit(
     tryEmit(dedupeKey: string, b: Negocio) {
       const k = dedupeKey.trim().toLowerCase()
       if (!b.nombre.trim() || !k || seen.has(k)) return false
+      const fp = stableBusinessFingerprint(b)
+      if (excludeBiz.has(fp)) return false
       seen.add(k)
       c++
       onNegocio(b)
@@ -1175,11 +1180,20 @@ export async function streamScrapeNegocios(
   cantidad: number,
   maxMs: number,
   onNegocio: (n: Negocio) => void,
+  excludeBusinessKeys?: Set<string> | string[],
 ): Promise<{ reason: StreamScrapeReason; total: number; requested: number }> {
   const requested = Math.max(1, Math.min(100, cantidad))
   const deadline = Date.now() + maxMs
   const log = (m: string) => { console.log(m) }
-  const emit = createScrapeEmit(requested, deadline, onNegocio)
+  const excludeSet =
+    excludeBusinessKeys == null
+      ? undefined
+      : excludeBusinessKeys instanceof Set
+        ? excludeBusinessKeys
+        : new Set(excludeBusinessKeys)
+  const emit = createScrapeEmit(requested, deadline, onNegocio, {
+    excludeBusinessKeys: excludeSet,
+  })
   const visitedMapPlace = new Set<string>()
   const mapsPlaceTitleFails = new Map<string, number>()
 

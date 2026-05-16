@@ -301,7 +301,7 @@ function CarpetasPageInner() {
                         >
                           <div className="min-w-0">
                             <Link
-                              href={`/?search=${encodeURIComponent(s.id)}`}
+                              href={`/busqueda-compartida/${encodeURIComponent(s.id)}`}
                               className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline line-clamp-2"
                             >
                               {s.categoria} · {s.ubicacion}

@@ -24,12 +24,15 @@ export function formatProspectSearchError(raw: string | undefined): string {
   return `Historial no guardado: ${m}. La búsqueda sigue en esta sesión.`
 }
 
+/** Solo búsquedas creadas por el usuario (no las compartidas por carpeta u otro recurso). */
 export async function listProspectSearches(
   supabase: SupabaseClient,
+  ownerUserId: string,
 ): Promise<{ data: ProspectSearchListItem[] | null; error: Error | null }> {
   const { data, error } = await supabase
     .from(TABLE)
     .select('id, created_at, updated_at, categoria, ubicacion, cantidad_solicitada, status, finish_reason, result_count')
+    .eq('user_id', ownerUserId)
     .order('updated_at', { ascending: false })
   return { data: data as ProspectSearchListItem[] | null, error: error ? new Error(error.message) : null }
 }

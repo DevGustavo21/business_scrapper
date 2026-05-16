@@ -35,7 +35,7 @@ function notificationLink(n: NotificationRow): { href: string; label: string } |
   }
   if (n.type === 'list_prospect_added' && typeof d.prospect_list_id === 'string') {
     return {
-      href: `/clientes-prospectos?lista=${encodeURIComponent(d.prospect_list_id)}`,
+      href: `/lista/${encodeURIComponent(d.prospect_list_id)}`,
       label: 'Ver lista',
     }
   }

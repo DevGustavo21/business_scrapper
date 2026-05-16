@@ -148,7 +148,7 @@ function CompartidoInner() {
                   <Link href="/carpetas" className="px-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 font-medium">
                     Carpetas
                   </Link>
-                  <Link href="/listas-prospectos" className="px-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 font-medium">
+                  <Link href="/clientes-prospectos" className="px-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 font-medium">
                     Listas
                   </Link>
                 </div>

@@ -11,7 +11,6 @@ import { NotificationsPopover } from '@/components/NotificationsPopover'
 const links = [
   { href: '/', label: 'Inicio' },
   { href: '/carpetas', label: 'Carpetas' },
-  { href: '/listas-prospectos', label: 'Listas' },
   { href: '/agregar-prospectos', label: 'Agregar prospectos' },
   { href: '/clientes-prospectos', label: 'Clientes prospectos' },
 ]

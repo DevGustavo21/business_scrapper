@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink, Heart, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CONTACTO_ESTADOS, type ContactoEstado, type NegocioFila } from '@/types/business'
@@ -58,6 +59,7 @@ export function ResultsTable({
   prospectHeart,
   deleteRow,
   summaryMode = 'scraped',
+  detailHref,
 }: {
   negocios: NegocioFila[]
   loading: boolean
@@ -84,6 +86,8 @@ export function ResultsTable({
   }
   /** `list`: textos para listados CRUD/prospectos sin copy de scraping. */
   summaryMode?: 'scraped' | 'list'
+  /** Si devuelve URL, el nombre es enlace al detalle del prospecto. */
+  detailHref?: (row: NegocioFila) => string | null
 }) {
   const cols = useMemo(() => {
     const out: { key: ColKey; label: string }[] = [{ key: '#', label: '#' }]
@@ -306,14 +310,27 @@ export function ResultsTable({
                       </td>
                     )
                   const k = col.key as keyof NegocioFila
-                  if (k === 'nombre')
+                  if (k === 'nombre') {
+                    const href = detailHref?.(n) ?? null
                     return (
                       <td key={k} className="px-3 py-3 font-medium text-neutral-900 dark:text-neutral-100 max-w-[160px]">
-                        <span className="line-clamp-2" title={n.nombre}>
-                          {n.nombre}
-                        </span>
+                        {href ? (
+                          <Link
+                            href={href}
+                            className="text-indigo-600 dark:text-indigo-400 hover:underline line-clamp-2"
+                            title={n.nombre}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {n.nombre}
+                          </Link>
+                        ) : (
+                          <span className="line-clamp-2" title={n.nombre}>
+                            {n.nombre}
+                          </span>
+                        )}
                       </td>
                     )
+                  }
                   if (k === 'sitioWeb')
                     return (
                       <td key={k} className="px-3 py-3 max-w-[140px]">

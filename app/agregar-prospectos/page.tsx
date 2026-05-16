@@ -241,7 +241,7 @@ export default function AgregarProspectosPage() {
               </select>
               <span className="mt-1 block text-[11px] text-neutral-500 font-normal">
                 Puedes crear listas compartidas en{' '}
-                <Link href="/listas-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
+                <Link href="/clientes-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
                   Listas de prospectos
                 </Link>
                 .

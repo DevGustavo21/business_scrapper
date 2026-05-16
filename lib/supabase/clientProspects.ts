@@ -125,12 +125,32 @@ export async function deleteProspectFromSearchRow(
   return { error: error ? new Error(error.message) : null }
 }
 
+export async function fetchClientProspectById(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<{ data: ClientProspectRow | null; error: Error | null }> {
+  const { data, error } = await supabase.from(TABLE).select('*').eq('id', id).maybeSingle()
+  return { data: data as ClientProspectRow | null, error: error ? new Error(error.message) : null }
+}
+
 export async function listAllClientProspects(
   supabase: SupabaseClient,
 ): Promise<{ data: ClientProspectRow[] | null; error: Error | null }> {
   const { data, error } = await supabase
     .from(TABLE)
     .select('*')
+    .order('updated_at', { ascending: false })
+  return { data: data as ClientProspectRow[] | null, error: error ? new Error(error.message) : null }
+}
+
+export async function listClientProspectsForList(
+  supabase: SupabaseClient,
+  prospectListId: string,
+): Promise<{ data: ClientProspectRow[] | null; error: Error | null }> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('*')
+    .eq('prospect_list_id', prospectListId)
     .order('updated_at', { ascending: false })
   return { data: data as ClientProspectRow[] | null, error: error ? new Error(error.message) : null }
 }

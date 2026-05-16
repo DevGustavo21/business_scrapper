@@ -1,6 +1,7 @@
 'use client'
 
 import { Plus, MessageSquare, Trash2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 
@@ -36,6 +37,7 @@ export function SearchHistorySidebar({
   onDelete,
   loggedIn,
   className,
+  sidebarFooter,
 }: {
   items: ProspectSearchListItem[]
   activeId: string | null
@@ -46,6 +48,7 @@ export function SearchHistorySidebar({
   onDelete: (id: string) => void
   loggedIn: boolean
   className?: string
+  sidebarFooter?: ReactNode
 }) {
   return (
     <aside
@@ -71,12 +74,13 @@ export function SearchHistorySidebar({
       <div className={`flex-1 overflow-y-auto p-2 ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
         {!loggedIn && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400 px-2 py-3 leading-relaxed">
-            Inicia sesión para guardar cada búsqueda como un chat. Al volver con el mismo correo recuperarás el historial.
+            Inicia sesión para guardar tus búsquedas aquí. Solo aparecen las que tú ejecutas; las compartidas por carpetas se
+            abren desde <strong>Carpetas</strong>.
           </p>
         )}
         {loggedIn && items.length === 0 && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400 px-2 py-3">
-            Aún no hay búsquedas guardadas. Pulsa <strong>Nueva</strong> y lanza una búsqueda.
+            Aún no hay búsquedas tuyas. Pulsa <strong>Nueva</strong> y lanza una búsqueda.
           </p>
         )}
         <ul className="flex flex-col gap-1">
@@ -128,6 +132,11 @@ export function SearchHistorySidebar({
           })}
         </ul>
       </div>
+      {sidebarFooter ? (
+        <div className="shrink-0 border-t border-neutral-200 dark:border-neutral-800 p-2 bg-neutral-50/90 dark:bg-neutral-950/80">
+          {sidebarFooter}
+        </div>
+      ) : null}
     </aside>
   )
 }
