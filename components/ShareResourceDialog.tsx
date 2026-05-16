@@ -31,12 +31,11 @@ export function ShareResourceDialog({
 
   if (!open) return null
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const sendInvite = async () => {
     setMsg(null)
     const trimmed = email.trim()
     if (!EMAIL_RE.test(trimmed)) {
-      setMsg('Escribe un correo válido.')
+      setMsg('Escribe un correo válido para enviar la invitación.')
       return
     }
     const norm = normalizeShareEmail(trimmed)
@@ -80,12 +79,12 @@ export function ShareResourceDialog({
       <div className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-6 flex flex-col gap-4">
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Compartir: {title}</h2>
         <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-          Introduce el correo del compañero. Si ya está registrado, recibirá una notificación. Si no, la invitación
-          quedará pendiente hasta que entre con ese mismo correo (Google).
+          Puedes cerrar cuando quieras. Si más adelante quieres sumar a alguien, vuelve a abrir compartir desde el recurso.
+          Opcionalmente, envía una invitación por correo.
         </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs font-medium text-neutral-700 dark:text-neutral-300">
-            Correo
+            Correo (opcional)
             <input
               type="email"
               autoComplete="email"
@@ -113,23 +112,24 @@ export function ShareResourceDialog({
               {msg}
             </p>
           )}
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
             >
-              Cerrar
+              Listo
             </button>
             <button
-              type="submit"
-              disabled={busy}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+              type="button"
+              onClick={() => void sendInvite()}
+              disabled={busy || !email.trim()}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
             >
               {busy ? 'Enviando…' : 'Enviar invitación'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
+import { ProspectWorkspaceSidebar } from '@/components/ProspectWorkspaceSidebar'
 import { Toast } from '@/components/Toast'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
@@ -14,14 +15,7 @@ import {
   updateClientProspectEstado,
   formatClientProspectError,
 } from '@/lib/supabase/clientProspects'
-import {
-  listThreadMessages,
-  insertThreadMessage,
-  listProspectTasks,
-  insertProspectTask,
-  updateProspectTaskDone,
-} from '@/lib/supabase/prospectDetail'
-import type { ProspectThreadMessageRow, ProspectTaskRow } from '@/lib/supabase/prospectDetail'
+import { insertEstadoChangedEvent } from '@/lib/supabase/prospectDetail'
 import {
   upsertProspectBlacklist,
   removeProspectBlacklistByFingerprint,
@@ -37,15 +31,18 @@ function ProspectDetailInner() {
   const [row, setRow] = useState<ClientProspectRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ProspectThreadMessageRow[]>([])
-  const [tasks, setTasks] = useState<ProspectTaskRow[]>([])
-  const [msgBody, setMsgBody] = useState('')
-  const [taskTitle, setTaskTitle] = useState('')
+  const [workspaceTick, setWorkspaceTick] = useState(0)
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
   const load = useCallback(async () => {
-    if (!id || !user || !isSupabaseConfigured()) {
+    if (!id || !isSupabaseConfigured()) {
+      setRow(null)
+      setLoading(false)
+      return
+    }
+    if (user === undefined) return
+    if (user === null) {
       setRow(null)
       setLoading(false)
       return
@@ -61,9 +58,6 @@ function ProspectDetailInner() {
     }
     setRow(data)
     setError(null)
-    const [m, t] = await Promise.all([listThreadMessages(sb, id), listProspectTasks(sb, id)])
-    if (!m.error) setMessages(m.data ?? [])
-    if (!t.error) setTasks(t.data ?? [])
     setLoading(false)
   }, [id, user])
 
@@ -83,6 +77,12 @@ function ProspectDetailInner() {
       return
     }
     setRow({ ...row, estado })
+    const { error: actErr } = await insertEstadoChangedEvent(sb, user.id, prev, estado, {
+      kind: 'prospect',
+      clientProspectId: row.id,
+    })
+    if (actErr) console.warn('[activity]', actErr.message)
+    setWorkspaceTick(t => t + 1)
     const f = stableBusinessFingerprint({
       nombre: row.nombre,
       telefono: row.telefono,
@@ -94,37 +94,6 @@ function ProspectDetailInner() {
     } else if (prev === 'No interesado' && estado !== 'No interesado') {
       await removeProspectBlacklistByFingerprint(sb, user.id, f)
     }
-  }
-
-  const sendMsg = async () => {
-    if (!user || !row || !msgBody.trim() || !isSupabaseConfigured()) return
-    const sb = createBrowserSupabaseClient()
-    const { error: e } = await insertThreadMessage(sb, row.id, user.id, msgBody)
-    if (e) setError(e.message)
-    else {
-      setMsgBody('')
-      const m = await listThreadMessages(sb, row.id)
-      if (!m.error) setMessages(m.data ?? [])
-    }
-  }
-
-  const addTask = async () => {
-    if (!user || !row || !taskTitle.trim() || !isSupabaseConfigured()) return
-    const sb = createBrowserSupabaseClient()
-    const { error: e } = await insertProspectTask(sb, row.id, user.id, taskTitle)
-    if (e) setError(e.message)
-    else {
-      setTaskTitle('')
-      const t = await listProspectTasks(sb, row.id)
-      if (!t.error) setTasks(t.data ?? [])
-    }
-  }
-
-  const toggleTask = async (taskId: string, done: boolean) => {
-    const sb = createBrowserSupabaseClient()
-    const { error: e } = await updateProspectTaskDone(sb, taskId, done)
-    if (e) setError(e.message)
-    else setTasks(prev => prev.map(x => (x.id === taskId ? { ...x, done } : x)))
   }
 
   if (!id) return null
@@ -140,11 +109,11 @@ function ProspectDetailInner() {
             </Link>
           </div>
           {!loggedIn && (
-            <p className="text-sm text-amber-800 border border-amber-200 rounded-xl px-4 py-3">
+            <p className="text-sm text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
               <Link href="/login" className="underline font-semibold">
                 Inicia sesión
               </Link>{' '}
-              para ver el detalle.
+              para guardar cambios y colaborar en el panel derecho.
             </p>
           )}
           {loading && <p className="text-sm text-neutral-500">Cargando…</p>}
@@ -190,7 +159,8 @@ function ProspectDetailInner() {
                     <select
                       value={row.estado}
                       onChange={e => void handleEstado(e.target.value as ContactoEstado)}
-                      className="mt-2 max-w-xs block rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-sm"
+                      disabled={!loggedIn}
+                      className="mt-2 max-w-xs block rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-sm disabled:opacity-50"
                     >
                       {CONTACTO_ESTADOS.map(s => (
                         <option key={s} value={s}>
@@ -205,73 +175,16 @@ function ProspectDetailInner() {
           )}
         </main>
 
-        {row && loggedIn && (
-          <aside className="lg:w-[380px] shrink-0 flex flex-col gap-4 lg:sticky lg:top-20 self-start max-h-[calc(100vh-6rem)]">
-            <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 flex flex-col gap-3 bg-neutral-50/50 dark:bg-neutral-950/40 overflow-hidden">
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Actividad del equipo</h2>
-              <div className="flex-1 overflow-y-auto max-h-[200px] flex flex-col gap-2 text-xs">
-                {messages.length === 0 && <p className="text-neutral-500">Aún no hay mensajes.</p>}
-                {messages.map(m => (
-                  <div
-                    key={m.id}
-                    className="rounded-lg bg-white dark:bg-neutral-900/80 border border-neutral-100 dark:border-neutral-800 p-2"
-                  >
-                    <p className="text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap">{m.body}</p>
-                    <p className="text-[10px] text-neutral-400 mt-1">
-                      {new Date(m.created_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 min-w-0 rounded-lg border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-xs bg-white dark:bg-neutral-950"
-                  placeholder="Mensaje…"
-                  value={msgBody}
-                  onChange={e => setMsgBody(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="shrink-0 px-2 py-1.5 rounded-lg bg-indigo-600 text-white text-xs"
-                  onClick={() => void sendMsg()}
-                >
-                  Enviar
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 flex flex-col gap-3 bg-neutral-50/50 dark:bg-neutral-950/40">
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Tareas</h2>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 rounded-lg border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-xs bg-white dark:bg-neutral-950"
-                  placeholder="Nueva tarea…"
-                  value={taskTitle}
-                  onChange={e => setTaskTitle(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="px-2 py-1.5 rounded-lg bg-indigo-600 text-white text-xs"
-                  onClick={() => void addTask()}
-                >
-                  Añadir
-                </button>
-              </div>
-              <ul className="flex flex-col gap-2 max-h-[220px] overflow-y-auto text-sm">
-                {tasks.map(t => (
-                  <li key={t.id} className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={t.done}
-                      onChange={e => void toggleTask(t.id, e.target.checked)}
-                      className="mt-1"
-                    />
-                    <span className={t.done ? 'line-through text-neutral-400' : ''}>{t.title}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </aside>
+        {row && (
+          <ProspectWorkspaceSidebar
+            target={{ kind: 'prospect', clientProspectId: row.id }}
+            prospectListId={row.prospect_list_id}
+            prospectOwnerId={row.user_id}
+            userId={user?.id ?? null}
+            loggedIn={loggedIn}
+            refreshKey={workspaceTick}
+            onError={setError}
+          />
         )}
       </div>
       {error && <Toast message={error} onClose={() => setError(null)} />}

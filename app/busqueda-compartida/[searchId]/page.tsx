@@ -30,6 +30,7 @@ import { stableBusinessFingerprint } from '@/lib/businessDedupe'
 import type { ContactoEstado, NegocioFila } from '@/types/business'
 import type { ProspectListRow } from '@/types/collaboration'
 import { normalizeNegocios } from '@/lib/negociosRows'
+import { insertEstadoChangedEvent } from '@/lib/supabase/prospectDetail'
 
 function BusquedaCompartidaInner() {
   const params = useParams()
@@ -150,7 +151,7 @@ function BusquedaCompartidaInner() {
         }
         return next
       })
-      if (user && isSupabaseConfigured() && prevRow && prevEstado !== estado) {
+      if (user && isSupabaseConfigured() && prevRow && prevEstado !== undefined && prevEstado !== estado) {
         const fp = stableBusinessFingerprint(prevRow)
         const sb = createBrowserSupabaseClient()
         if (estado === 'No interesado') {
@@ -158,6 +159,10 @@ function BusquedaCompartidaInner() {
         } else if (prevEstado === 'No interesado') {
           void removeProspectBlacklistByFingerprint(sb, user.id, fp)
         }
+        const target = prevRow.prospectRecordId
+          ? ({ kind: 'prospect' as const, clientProspectId: prevRow.prospectRecordId })
+          : ({ kind: 'search_row' as const, searchId, rowId: id })
+        void insertEstadoChangedEvent(sb, user.id, prevEstado, estado, target)
       }
     },
     [user, searchId],

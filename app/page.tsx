@@ -49,6 +49,7 @@ import {
   replaceSearchResultFingerprints,
   upsertProspectBlacklist,
 } from '@/lib/supabase/prospectPipeline'
+import { insertEstadoChangedEvent } from '@/lib/supabase/prospectDetail'
 import { stableBusinessFingerprint } from '@/lib/businessDedupe'
 import { normalizeNegocios } from '@/lib/negociosRows'
 import { MarkProspectDialog, type MarkProspectDest, loadProspectListsForMark } from '@/components/MarkProspectDialog'
@@ -236,13 +237,22 @@ function HomeInner() {
         }
         return next
       })
-      if (user && isSupabaseConfigured() && prevRow && prevEstado !== estado) {
+      if (user && isSupabaseConfigured() && prevRow && prevEstado !== undefined && prevEstado !== estado) {
         const fp = stableBusinessFingerprint(prevRow)
         const sb = createBrowserSupabaseClient()
         if (estado === 'No interesado') {
           void upsertProspectBlacklist(sb, user.id, fp, prevRow.nombre, prevRow.prospectRecordId ?? null)
         } else if (prevEstado === 'No interesado') {
           void removeProspectBlacklistByFingerprint(sb, user.id, fp)
+        }
+        const sid = activeSearchIdRef.current
+        const target = prevRow.prospectRecordId
+          ? ({ kind: 'prospect' as const, clientProspectId: prevRow.prospectRecordId })
+          : sid
+            ? ({ kind: 'search_row' as const, searchId: sid, rowId: id })
+            : null
+        if (target) {
+          void insertEstadoChangedEvent(sb, user.id, prevEstado, estado, target)
         }
       }
     },

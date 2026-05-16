@@ -215,3 +215,32 @@ export async function declineCollaborationInviteRpc(supabase: SupabaseClient, in
   if (!j?.ok) return { ok: false as const, error: new Error(j?.error ?? 'reject') }
   return { ok: true as const, error: null }
 }
+
+export type ProspectListMemberRow = { user_id: string; email: string }
+
+export async function fetchProspectListMembersForMentions(
+  supabase: SupabaseClient,
+  listId: string,
+): Promise<{ data: ProspectListMemberRow[]; error: Error | null }> {
+  const { data, error } = await supabase.rpc('list_prospect_list_members', { p_list_id: listId })
+  if (error) return { data: [], error: new Error(error.message) }
+  return { data: (data ?? []) as ProspectListMemberRow[], error: null }
+}
+
+export async function fetchProspectSearchCollaboratorsForMentions(
+  supabase: SupabaseClient,
+  searchId: string,
+): Promise<{ data: ProspectListMemberRow[]; error: Error | null }> {
+  const { data, error } = await supabase.rpc('list_prospect_search_collaborators', { p_search_id: searchId })
+  if (error) return { data: [], error: new Error(error.message) }
+  return { data: (data ?? []) as ProspectListMemberRow[], error: null }
+}
+
+export async function fetchProfileEmail(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ email: string | null; error: Error | null }> {
+  const { data, error } = await supabase.from('profiles').select('email').eq('id', userId).maybeSingle()
+  if (error) return { email: null, error: new Error(error.message) }
+  return { email: (data?.email as string | undefined) ?? null, error: null }
+}
