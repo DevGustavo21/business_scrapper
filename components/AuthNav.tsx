@@ -33,6 +33,12 @@ export function AuthNav() {
 
   return (
     <div className="flex items-center gap-2 sm:gap-3">
+      <Link
+        href="/settings/perfil"
+        className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 shrink-0"
+      >
+        Perfil
+      </Link>
       <span className="hidden sm:inline text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[160px]">
         {user.email}
       </span>

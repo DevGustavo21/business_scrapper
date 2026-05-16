@@ -216,7 +216,13 @@ export async function declineCollaborationInviteRpc(supabase: SupabaseClient, in
   return { ok: true as const, error: null }
 }
 
-export type ProspectListMemberRow = { user_id: string; email: string }
+export type ProspectListMemberRow = {
+  user_id: string
+  email: string
+  avatar_url?: string | null
+  first_name?: string | null
+  last_name?: string | null
+}
 
 export async function fetchProspectListMembersForMentions(
   supabase: SupabaseClient,

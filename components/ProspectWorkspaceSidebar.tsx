@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, ListTodo, MessageSquare } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import {
-  fetchProfileEmail,
   fetchProspectListMembersForMentions,
   fetchProspectSearchCollaboratorsForMentions,
   type ProspectListMemberRow,
 } from '@/lib/supabase/collaboration'
+import { fetchMyProfile } from '@/lib/supabase/profiles'
 import {
   insertProspectTaskForTarget,
   insertThreadMessageForTarget,
@@ -53,6 +53,15 @@ function avatarInitials(fromEmail: string) {
   const local = s.split('@')[0] ?? s
   if (local.length >= 2) return local.slice(0, 2).toUpperCase()
   return local.slice(0, 1).toUpperCase()
+}
+
+function avatarInitialsFromMember(m: ProspectListMemberRow) {
+  const a = (m.first_name ?? '').trim()
+  const b = (m.last_name ?? '').trim()
+  if (a && b) return (a[0] + b[0]).toUpperCase()
+  if (a.length >= 2) return a.slice(0, 2).toUpperCase()
+  if (a.length === 1) return (a[0] + (b[0] ?? '')).toUpperCase() || a.toUpperCase()
+  return avatarInitials(m.email)
 }
 
 function renderMessageBody(
@@ -124,10 +133,19 @@ export function ProspectWorkspaceSidebar({
       return
     }
     if (prospectOwnerId) {
-      const { email, error } = await fetchProfileEmail(sb, prospectOwnerId)
+      const { data, error } = await fetchMyProfile(sb, prospectOwnerId)
       if (error) onError?.(error.message)
-      if (email) setMembers([{ user_id: prospectOwnerId, email }])
-      else setMembers([])
+      if (data) {
+        setMembers([
+          {
+            user_id: prospectOwnerId,
+            email: data.email,
+            avatar_url: data.avatar_url,
+            first_name: data.first_name,
+            last_name: data.last_name,
+          },
+        ])
+      } else setMembers([])
     } else setMembers([])
   }, [sb, target, prospectListId, prospectOwnerId, onError])
 
@@ -293,8 +311,10 @@ export function ProspectWorkspaceSidebar({
           {messages.length === 0 && <p className="text-neutral-500">Aún no hay mensajes.</p>}
           {messages.map(m => {
             const isOwn = Boolean(userId && m.user_id === userId)
-            const senderEmail = memberById.get(m.user_id) ?? '…'
-            const initials = avatarInitials(senderEmail)
+            const member = members.find(x => x.user_id === m.user_id)
+            const senderEmail = member?.email ?? memberById.get(m.user_id) ?? '…'
+            const initials = member ? avatarInitialsFromMember(member) : avatarInitials(senderEmail)
+            const photo = member?.avatar_url?.trim() || null
             return (
               <div
                 key={m.id}
@@ -302,13 +322,18 @@ export function ProspectWorkspaceSidebar({
               >
                 <div
                   className={cn(
-                    'shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm',
-                    avatarHueClass(m.user_id),
+                    'shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold text-white shadow-sm',
+                    !photo && avatarHueClass(m.user_id),
                   )}
                   title={senderEmail}
                   aria-label={`Mensaje de ${senderEmail}`}
                 >
-                  {initials}
+                  {photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photo} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initials
+                  )}
                 </div>
                 <div
                   className={cn(

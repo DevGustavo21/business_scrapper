@@ -79,12 +79,12 @@ export function ShareResourceDialog({
       <div className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-6 flex flex-col gap-4">
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Compartir: {title}</h2>
         <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-          Puedes cerrar cuando quieras. Si más adelante quieres sumar a alguien, vuelve a abrir compartir desde el recurso.
-          Opcionalmente, envía una invitación por correo.
+          Introduce el correo y el permiso, luego pulsa <strong>Enviar invitación</strong>. Si prefieres no invitar ahora,
+          pulsa <strong>Cancelar</strong>.
         </p>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs font-medium text-neutral-700 dark:text-neutral-300">
-            Correo (opcional)
+            Correo del invitado
             <input
               type="email"
               autoComplete="email"
@@ -115,18 +115,18 @@ export function ShareResourceDialog({
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+              onClick={() => void sendInvite()}
+              disabled={busy || !email.trim()}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Listo
+              {busy ? 'Enviando…' : 'Enviar invitación'}
             </button>
             <button
               type="button"
-              onClick={() => void sendInvite()}
-              disabled={busy || !email.trim()}
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+              onClick={onClose}
+              className="flex-1 sm:flex-initial sm:min-w-[7.5rem] py-2.5 rounded-xl text-sm font-medium border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
-              {busy ? 'Enviando…' : 'Enviar invitación'}
+              Cancelar
             </button>
           </div>
         </div>

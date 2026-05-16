@@ -66,6 +66,14 @@ export function SearchHistoryConfigFooter() {
           role="menu"
         >
           <Link
+            href="/settings/perfil"
+            className="block px-3 py-2.5 text-xs font-medium text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            Perfil
+          </Link>
+          <Link
             href="/settings/lista-negra"
             className="block px-3 py-2.5 text-xs font-medium text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800"
             role="menuitem"
