@@ -48,7 +48,11 @@ create policy avatars_delete_own on storage.objects
   );
 
 -- --- RPCs miembros: incluir datos de perfil para UI (avatar, nombre) -----------
-create or replace function public.list_prospect_list_members(p_list_id uuid)
+-- Cambio de tipo de retorno: en PG hay que DROP antes de volver a crear (error 42P13 con solo REPLACE).
+drop function if exists public.list_prospect_list_members(uuid);
+drop function if exists public.list_prospect_search_collaborators(uuid);
+
+create function public.list_prospect_list_members(p_list_id uuid)
 returns table (
   user_id uuid,
   email text,
@@ -87,7 +91,7 @@ as $$
   );
 $$;
 
-create or replace function public.list_prospect_search_collaborators(p_search_id uuid)
+create function public.list_prospect_search_collaborators(p_search_id uuid)
 returns table (
   user_id uuid,
   email text,
@@ -135,3 +139,6 @@ as $$
       )
   );
 $$;
+
+grant execute on function public.list_prospect_list_members(uuid) to authenticated;
+grant execute on function public.list_prospect_search_collaborators(uuid) to authenticated;
