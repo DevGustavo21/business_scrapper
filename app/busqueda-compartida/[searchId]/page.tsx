@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
@@ -33,7 +33,6 @@ import { normalizeNegocios } from '@/lib/negociosRows'
 
 function BusquedaCompartidaInner() {
   const params = useParams()
-  const router = useRouter()
   const searchId = typeof params.searchId === 'string' ? params.searchId : ''
   const user = useSupabaseUser()
 
@@ -100,10 +99,6 @@ function BusquedaCompartidaInner() {
         setLoading(false)
         return
       }
-      if (data.user_id === user.id) {
-        router.replace(`/?search=${encodeURIComponent(searchId)}`)
-        return
-      }
       setOwnerId(data.user_id)
       setCategoria(data.categoria)
       setUbicacion(data.ubicacion)
@@ -117,7 +112,7 @@ function BusquedaCompartidaInner() {
     return () => {
       cancelled = true
     }
-  }, [searchId, user, router])
+  }, [searchId, user])
 
   const flushPersistTimer = () => {
     if (persistTimerRef.current !== null) {
@@ -128,14 +123,14 @@ function BusquedaCompartidaInner() {
 
   const scheduleCloudPersist = useCallback(
     (persistId: string) => {
-      if (!isOwner || !user || !isSupabaseConfigured()) return
+      if (!user || !isSupabaseConfigured()) return
       flushPersistTimer()
       persistTimerRef.current = window.setTimeout(() => {
         persistTimerRef.current = null
         void updateProspectSearchProgress(createBrowserSupabaseClient(), persistId, negociosRef.current)
       }, 800)
     },
-    [user, isOwner],
+    [user],
   )
 
   const handleEstadoChange = useCallback(
@@ -148,7 +143,7 @@ function BusquedaCompartidaInner() {
         if (row?.prospectRecordId && user && isSupabaseConfigured()) {
           void updateClientProspectEstado(createBrowserSupabaseClient(), row.prospectRecordId, estado)
         }
-        if (isOwner && searchId && user && isSupabaseConfigured()) {
+        if (searchId && user && isSupabaseConfigured()) {
           window.setTimeout(() => {
             void updateProspectSearchProgress(createBrowserSupabaseClient(), searchId, next)
           }, 0)
@@ -165,7 +160,7 @@ function BusquedaCompartidaInner() {
         }
       }
     },
-    [user, searchId, isOwner],
+    [user, searchId],
   )
 
   const confirmMarkProspect = useCallback(
@@ -181,7 +176,7 @@ function BusquedaCompartidaInner() {
         return
       }
       setNegocios(prev => prev.map(r => (r.id === row.id ? { ...r, esProspecto: true, prospectRecordId: pid } : r)))
-      if (isOwner) scheduleCloudPersist(searchId)
+      scheduleCloudPersist(searchId)
       setMarkRow(null)
       if (dest.kind === 'shared_new') {
         setShareNewListId(dest.listId)
@@ -189,7 +184,7 @@ function BusquedaCompartidaInner() {
         setShareNewListOpen(true)
       }
     },
-    [user, markRow, searchId, isOwner, scheduleCloudPersist],
+    [user, markRow, searchId, scheduleCloudPersist],
   )
 
   const handleProspectToggle = useCallback(
@@ -208,13 +203,13 @@ function BusquedaCompartidaInner() {
         setNegocios(prev =>
           prev.map(r => (r.id === row.id ? { ...r, esProspecto: false, prospectRecordId: null } : r)),
         )
-        if (isOwner) scheduleCloudPersist(searchId)
+        scheduleCloudPersist(searchId)
       } else {
         setMarkRow(row)
         setMarkDialogOpen(true)
       }
     },
-    [user, searchId, scheduleCloudPersist, isOwner],
+    [user, searchId, scheduleCloudPersist],
   )
 
   const handleDeleteNegocioRow = useCallback(
@@ -303,9 +298,14 @@ function BusquedaCompartidaInner() {
           loading={loading}
           requestedQty={requestedQty}
           onEstadoChange={handleEstadoChange}
-          detailHref={row =>
-            row.prospectRecordId ? `/prospecto/${encodeURIComponent(row.prospectRecordId)}` : null
-          }
+          detailHref={row => {
+            if (row.prospectRecordId) {
+              return `/prospecto/${encodeURIComponent(row.prospectRecordId)}`
+            }
+            const base = `/busqueda/${encodeURIComponent(searchId)}/negocio/${encodeURIComponent(row.id)}`
+            const next = encodeURIComponent(`/busqueda-compartida/${searchId}`)
+            return `${base}?next=${next}`
+          }}
           prospectHeart={
             loggedIn && searchId
               ? {

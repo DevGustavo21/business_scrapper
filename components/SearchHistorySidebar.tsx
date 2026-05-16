@@ -1,6 +1,7 @@
 'use client'
 
-import { Plus, MessageSquare, Trash2 } from 'lucide-react'
+import { Plus, MessageSquare, Trash2, Settings, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
@@ -25,6 +26,32 @@ function formatWhen(iso: string): string {
   } catch {
     return ''
   }
+}
+
+export function SearchHistoryConfigFooter() {
+  return (
+    <div className="relative py-0.5">
+      <div className="peer flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800/80 cursor-default">
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <Settings size={16} className="shrink-0 text-neutral-500 dark:text-neutral-400" aria-hidden />
+          Configuración
+        </span>
+        <ChevronRight size={16} className="shrink-0 text-neutral-400 peer-hover:text-indigo-500 rotate-[-90deg]" />
+      </div>
+      <div
+        className="pointer-events-none invisible absolute bottom-full left-0 right-0 z-20 mb-1 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 py-1 shadow-lg opacity-0 transition-opacity peer-hover:visible peer-hover:opacity-100 peer-hover:pointer-events-auto hover:visible hover:opacity-100 hover:pointer-events-auto"
+        role="menu"
+      >
+        <Link
+          href="/settings/lista-negra"
+          className="block px-3 py-2.5 text-xs font-medium text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+          role="menuitem"
+        >
+          Lista negra
+        </Link>
+      </div>
+    </div>
+  )
 }
 
 export function SearchHistorySidebar({

@@ -12,6 +12,7 @@ import { Toast } from '@/components/Toast'
 import { SearchCompleteDialog, type SearchCompleteSummary } from '@/components/SearchCompleteDialog'
 import {
   SearchHistorySidebar,
+  SearchHistoryConfigFooter,
   readStoredActiveSearchId,
   writeStoredActiveSearchId,
 } from '@/components/SearchHistorySidebar'
@@ -575,14 +576,7 @@ function HomeInner() {
             mobileHistoryOpen ? 'max-sm:translate-x-0' : 'max-sm:-translate-x-full',
             'sm:translate-x-0',
           )}
-          sidebarFooter={
-            <Link
-              href="/settings/lista-negra"
-              className="block w-full text-center text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/80"
-            >
-              Configuración
-            </Link>
-          }
+          sidebarFooter={loggedIn ? <SearchHistoryConfigFooter /> : undefined}
         />
 
         <main className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
@@ -642,9 +636,15 @@ function HomeInner() {
             streamActive={loading && negocios.length > 0}
             requestedQty={requestedQty}
             onEstadoChange={handleEstadoChange}
-            detailHref={row =>
-              row.prospectRecordId ? `/prospecto/${encodeURIComponent(row.prospectRecordId)}` : null
-            }
+            detailHref={row => {
+              if (row.prospectRecordId) {
+                return `/prospecto/${encodeURIComponent(row.prospectRecordId)}`
+              }
+              if (!activeSearchId) return null
+              const base = `/busqueda/${encodeURIComponent(activeSearchId)}/negocio/${encodeURIComponent(row.id)}`
+              const next = encodeURIComponent('/')
+              return `${base}?next=${next}`
+            }}
             prospectHeart={
               loggedIn && activeSearchId
                 ? {
