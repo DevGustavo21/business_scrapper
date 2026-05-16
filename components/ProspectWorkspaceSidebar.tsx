@@ -31,14 +31,46 @@ function mentionToken(memberEmail: string) {
   return `@${memberEmail}`
 }
 
-function renderMessageBody(body: string, members: ProspectListMemberRow[]) {
+const AVATAR_HUES = [
+  'bg-violet-600',
+  'bg-sky-600',
+  'bg-amber-600',
+  'bg-rose-600',
+  'bg-fuchsia-600',
+  'bg-teal-600',
+] as const
+
+function avatarHueClass(userId: string) {
+  let h = 0
+  for (let i = 0; i < userId.length; i++) h = (h + userId.charCodeAt(i)) % AVATAR_HUES.length
+  return AVATAR_HUES[h]
+}
+
+/** Iniciales para avatar (correo o fallback) */
+function avatarInitials(fromEmail: string) {
+  const s = fromEmail.trim()
+  if (!s || s === '…') return '?'
+  const local = s.split('@')[0] ?? s
+  if (local.length >= 2) return local.slice(0, 2).toUpperCase()
+  return local.slice(0, 1).toUpperCase()
+}
+
+function renderMessageBody(
+  body: string,
+  members: ProspectListMemberRow[],
+  variant: 'incoming' | 'outgoing',
+) {
   const tokens = new Set(members.map(m => mentionToken(m.email)))
+  const mentionCls =
+    variant === 'outgoing'
+      ? 'font-semibold text-emerald-50 underline decoration-emerald-200/90 underline-offset-2'
+      : 'font-semibold text-indigo-700 dark:text-indigo-300'
   const parts = body.split(/(\s+)/)
   return parts.map((part, i) => {
     const trimmed = part.trim()
     if (tokens.has(trimmed)) {
       return (
-        <span key={i} className="font-semibold text-indigo-700 dark:text-indigo-300">
+        <span key={i} className={mentionCls}>
           {part}
         </span>
       )
@@ -257,21 +289,55 @@ export function ProspectWorkspaceSidebar({
             Escribe <strong>@</strong> para mencionar a alguien del espacio de trabajo (aparecerá resaltado).
           </p>
         )}
-        <div className="flex-1 overflow-y-auto max-h-[200px] flex flex-col gap-2 text-xs">
+        <div className="flex-1 overflow-y-auto max-h-[240px] flex flex-col gap-3 text-xs">
           {messages.length === 0 && <p className="text-neutral-500">Aún no hay mensajes.</p>}
-          {messages.map(m => (
-            <div
-              key={m.id}
-              className="rounded-lg bg-white dark:bg-neutral-900/80 border border-neutral-100 dark:border-neutral-800 p-2"
-            >
-              <p className="text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap break-words">
-                {renderMessageBody(m.body, members)}
-              </p>
-              <p className="text-[10px] text-neutral-400 mt-1">
-                {new Date(m.created_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
-              </p>
-            </div>
-          ))}
+          {messages.map(m => {
+            const isOwn = Boolean(userId && m.user_id === userId)
+            const senderEmail = memberById.get(m.user_id) ?? '…'
+            const initials = avatarInitials(senderEmail)
+            return (
+              <div
+                key={m.id}
+                className={cn('flex w-full gap-2 items-end', isOwn ? 'flex-row-reverse' : 'flex-row')}
+              >
+                <div
+                  className={cn(
+                    'shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm',
+                    avatarHueClass(m.user_id),
+                  )}
+                  title={senderEmail}
+                  aria-label={`Mensaje de ${senderEmail}`}
+                >
+                  {initials}
+                </div>
+                <div
+                  className={cn(
+                    'min-w-0 max-w-[85%] rounded-2xl px-3 py-2 shadow-sm border',
+                    isOwn
+                      ? 'bg-emerald-600 dark:bg-emerald-700 text-white border-emerald-500/80 dark:border-emerald-600 rounded-br-md'
+                      : 'bg-neutral-100 dark:bg-neutral-800/90 text-neutral-800 dark:text-neutral-100 border-neutral-200/80 dark:border-neutral-700 rounded-bl-md',
+                  )}
+                >
+                  {!isOwn && (
+                    <p className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 mb-1 truncate">
+                      {senderEmail}
+                    </p>
+                  )}
+                  <p className={cn('whitespace-pre-wrap break-words leading-relaxed', isOwn ? 'text-white' : '')}>
+                    {renderMessageBody(m.body, members, isOwn ? 'outgoing' : 'incoming')}
+                  </p>
+                  <p
+                    className={cn(
+                      'text-[10px] mt-1.5 tabular-nums',
+                      isOwn ? 'text-emerald-100/90' : 'text-neutral-400 dark:text-neutral-500',
+                    )}
+                  >
+                    {new Date(m.created_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
         </div>
         {mentionOpen && mentionPick.length > 0 && (
           <div className="absolute z-30 bottom-[4.5rem] left-3 right-3 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 shadow-lg max-h-36 overflow-y-auto text-xs">
@@ -291,16 +357,20 @@ export function ProspectWorkspaceSidebar({
         <textarea
           ref={taRef}
           className="w-full min-h-[72px] rounded-lg border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-xs bg-white dark:bg-neutral-950 disabled:opacity-50"
-          placeholder="Mensaje… (@ para mencionar)"
+          placeholder="Escribe un mensaje… (@ mencionar). Enter envía, Shift+Enter nueva línea."
           value={msgBody}
           disabled={!loggedIn || !userId}
           onSelect={e => updateMentionUi(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
           onChange={e => onMsgChange(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              void sendMsg()
+            if (e.key !== 'Enter' || e.shiftKey) return
+            if (e.nativeEvent.isComposing) return
+            e.preventDefault()
+            if (mentionOpen && mentionPick.length > 0) {
+              insertMention(mentionPick[0])
+              return
             }
+            void sendMsg()
           }}
         />
         <button

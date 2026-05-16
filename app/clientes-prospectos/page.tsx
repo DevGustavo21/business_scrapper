@@ -7,6 +7,7 @@ import { AppHeader } from '@/components/AppHeader'
 import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
 import { Toast } from '@/components/Toast'
+import { ShareResourceDialog } from '@/components/ShareResourceDialog'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
@@ -38,8 +39,17 @@ function ClientesProspectosInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [listFilter, setListFilter] = useState<string>('all')
+  const [shareListOpen, setShareListOpen] = useState(false)
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
+
+  const selectedList = useMemo(
+    () => (listFilter !== 'all' && listFilter !== 'none' ? lists.find(l => l.id === listFilter) ?? null : null),
+    [lists, listFilter],
+  )
+  const canShareSelectedList = Boolean(
+    loggedIn && user && selectedList && selectedList.owner_id === user.id,
+  )
 
   useEffect(() => {
     if (listaFromUrl) {
@@ -151,7 +161,8 @@ function ClientesProspectosInner() {
             <Link href="/" className="text-indigo-600 dark:text-indigo-400 font-medium">
               búsqueda
             </Link>
-            .
+            . Si eres <strong>dueño</strong> de una lista, selecciónala en el filtro y usa{' '}
+            <strong>Compartir esta lista</strong> para invitar a tu equipo.
           </p>
         </div>
 
@@ -182,7 +193,18 @@ function ClientesProspectosInner() {
                 ))}
               </select>
             </label>
-            <p className="text-xs text-neutral-500 flex-1">{filterHint}</p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
+              <p className="text-xs text-neutral-500 flex-1">{filterHint}</p>
+              {canShareSelectedList && selectedList && (
+                <button
+                  type="button"
+                  onClick={() => setShareListOpen(true)}
+                  className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  Compartir esta lista
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -225,6 +247,18 @@ function ClientesProspectosInner() {
       </main>
 
       {error && <Toast message={error} onClose={() => setError(null)} />}
+
+      {loggedIn && shareListOpen && selectedList && user && (
+        <ShareResourceDialog
+          open={shareListOpen}
+          onClose={() => setShareListOpen(false)}
+          title={selectedList.name}
+          resourceType="prospect_list"
+          resourceId={selectedList.id}
+          inviterUserId={user.id}
+          inviterEmail={user.email ?? undefined}
+        />
+      )}
     </div>
   )
 }
