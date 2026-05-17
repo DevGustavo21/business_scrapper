@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Clock, ListTodo, MessageSquare } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import {
@@ -118,6 +118,8 @@ export function ProspectWorkspaceSidebar({
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionPick, setMentionPick] = useState<ProspectListMemberRow[]>([])
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const messagesScrollRef = useRef<HTMLDivElement>(null)
+  const scrollMessagesToBottomRef = useRef(false)
 
   const loadMembers = useCallback(async () => {
     if (target.kind === 'search_row') {
@@ -171,6 +173,23 @@ export function ProspectWorkspaceSidebar({
     void loadWorkspace()
   }, [loadWorkspace, refreshKey])
 
+  useEffect(() => {
+    scrollMessagesToBottomRef.current = false
+    const el = messagesScrollRef.current
+    if (el) el.scrollTop = 0
+  }, [target, refreshKey])
+
+  useLayoutEffect(() => {
+    const el = messagesScrollRef.current
+    if (!el || messages.length === 0) return
+    if (scrollMessagesToBottomRef.current) {
+      el.scrollTop = el.scrollHeight
+      scrollMessagesToBottomRef.current = false
+    } else {
+      el.scrollTop = 0
+    }
+  }, [messages])
+
   const updateMentionUi = (text: string, cursor: number) => {
     const before = text.slice(0, cursor)
     const at = before.lastIndexOf('@')
@@ -221,6 +240,7 @@ export function ProspectWorkspaceSidebar({
     if (error) onError?.(error.message)
     else {
       setMsgBody('')
+      scrollMessagesToBottomRef.current = true
       const m = await listThreadMessagesForTarget(sb, target)
       if (!m.error) setMessages(m.data ?? [])
     }
@@ -307,7 +327,10 @@ export function ProspectWorkspaceSidebar({
             Escribe <strong>@</strong> para mencionar a alguien del espacio de trabajo (aparecerá resaltado).
           </p>
         )}
-        <div className="flex-1 overflow-y-auto max-h-[240px] flex flex-col gap-3 text-xs">
+        <div
+          ref={messagesScrollRef}
+          className="flex-1 overflow-y-auto max-h-[240px] flex flex-col gap-3 text-xs overscroll-contain"
+        >
           {messages.length === 0 && <p className="text-neutral-500">Aún no hay mensajes.</p>}
           {messages.map(m => {
             const isOwn = Boolean(userId && m.user_id === userId)

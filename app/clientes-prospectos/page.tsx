@@ -8,6 +8,7 @@ import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
 import { Toast } from '@/components/Toast'
 import { ShareResourceDialog } from '@/components/ShareResourceDialog'
+import { SharedListMembersDialog } from '@/components/SharedListMembersDialog'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
@@ -18,7 +19,7 @@ import {
   updateClientProspectEstado,
   formatClientProspectError,
 } from '@/lib/supabase/clientProspects'
-import { listProspectListsForUser } from '@/lib/supabase/collaboration'
+import { countProspectListCollaborators, listProspectListsForUser } from '@/lib/supabase/collaboration'
 import { stableBusinessFingerprint } from '@/lib/businessDedupe'
 import {
   upsertProspectBlacklist,
@@ -40,6 +41,8 @@ function ClientesProspectosInner() {
   const [error, setError] = useState<string | null>(null)
   const [listFilter, setListFilter] = useState<string>('all')
   const [shareListOpen, setShareListOpen] = useState(false)
+  const [sharedMembersOpen, setSharedMembersOpen] = useState(false)
+  const [collaboratorCount, setCollaboratorCount] = useState(0)
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
 
@@ -50,6 +53,16 @@ function ClientesProspectosInner() {
   const canShareSelectedList = Boolean(
     loggedIn && user && selectedList && selectedList.owner_id === user.id,
   )
+  const showSharedWith = Boolean(canShareSelectedList && collaboratorCount > 0)
+
+  useEffect(() => {
+    if (!canShareSelectedList || !selectedList || !isSupabaseConfigured()) {
+      setCollaboratorCount(0)
+      return
+    }
+    const sb = createBrowserSupabaseClient()
+    void countProspectListCollaborators(sb, selectedList.id).then(({ count }) => setCollaboratorCount(count))
+  }, [canShareSelectedList, selectedList?.id])
 
   useEffect(() => {
     if (listaFromUrl) {
@@ -195,6 +208,15 @@ function ClientesProspectosInner() {
             </label>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
               <p className="text-xs text-neutral-500 flex-1">{filterHint}</p>
+              {showSharedWith && selectedList && user && (
+                <button
+                  type="button"
+                  onClick={() => setSharedMembersOpen(true)}
+                  className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold border border-neutral-300 dark:border-neutral-600 text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                >
+                  Compartido con ({collaboratorCount})
+                </button>
+              )}
               {canShareSelectedList && selectedList && (
                 <button
                   type="button"
@@ -251,12 +273,33 @@ function ClientesProspectosInner() {
       {loggedIn && shareListOpen && selectedList && user && (
         <ShareResourceDialog
           open={shareListOpen}
-          onClose={() => setShareListOpen(false)}
+          onClose={() => {
+            setShareListOpen(false)
+            void load()
+          }}
           title={selectedList.name}
           resourceType="prospect_list"
           resourceId={selectedList.id}
           inviterUserId={user.id}
           inviterEmail={user.email ?? undefined}
+        />
+      )}
+
+      {loggedIn && sharedMembersOpen && selectedList && user && (
+        <SharedListMembersDialog
+          open={sharedMembersOpen}
+          onClose={() => {
+            setSharedMembersOpen(false)
+            if (selectedList) {
+              const sb = createBrowserSupabaseClient()
+              void countProspectListCollaborators(sb, selectedList.id).then(({ count }) =>
+                setCollaboratorCount(count),
+              )
+            }
+          }}
+          listId={selectedList.id}
+          listName={selectedList.name}
+          ownerId={user.id}
         />
       )}
     </div>

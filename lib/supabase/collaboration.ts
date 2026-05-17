@@ -250,3 +250,30 @@ export async function fetchProfileEmail(
   if (error) return { email: null, error: new Error(error.message) }
   return { email: (data?.email as string | undefined) ?? null, error: null }
 }
+
+export async function countProspectListCollaborators(
+  supabase: SupabaseClient,
+  listId: string,
+): Promise<{ count: number; error: Error | null }> {
+  const { count, error } = await supabase
+    .from('collaboration_members')
+    .select('*', { count: 'exact', head: true })
+    .eq('resource_type', 'prospect_list')
+    .eq('resource_id', listId)
+  if (error) return { count: 0, error: new Error(error.message) }
+  return { count: count ?? 0, error: null }
+}
+
+export async function removeProspectListCollaborator(
+  supabase: SupabaseClient,
+  listId: string,
+  collaboratorUserId: string,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from('collaboration_members')
+    .delete()
+    .eq('resource_type', 'prospect_list')
+    .eq('resource_id', listId)
+    .eq('user_id', collaboratorUserId)
+  return { error: error ? new Error(error.message) : null }
+}
