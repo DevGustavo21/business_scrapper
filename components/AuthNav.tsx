@@ -1,23 +1,52 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronDown, Settings } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
-import { upsertMyProfile } from '@/lib/supabase/profiles'
+import { fetchMyProfile, upsertMyProfile, type ProfileRow } from '@/lib/supabase/profiles'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { cn } from '@/lib/utils'
+
+function greetingName(profile: ProfileRow | null, email: string) {
+  const a = (profile?.first_name ?? '').trim()
+  const b = (profile?.last_name ?? '').trim()
+  if (a || b) return [a, b].filter(Boolean).join(' ')
+  return email
+}
 
 export function AuthNav() {
   const user = useSupabaseUser()
+  const [profile, setProfile] = useState<ProfileRow | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [logoutOpen, setLogoutOpen] = useState(false)
+  const [logoutBusy, setLogoutBusy] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  const loadProfile = useCallback(async () => {
     if (!user || !isSupabaseConfigured()) return
     const sb = createBrowserSupabaseClient()
-    void upsertMyProfile(sb, user.id, user.email ?? '')
+    await upsertMyProfile(sb, user.id, user.email ?? '')
+    const { data } = await fetchMyProfile(sb, user.id)
+    setProfile(data)
   }, [user])
 
+  useEffect(() => {
+    void loadProfile()
+  }, [loadProfile])
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+
   if (user === undefined) {
-    return <div className="h-8 w-24 rounded-md bg-neutral-200 dark:bg-neutral-700 animate-pulse" aria-hidden />
+    return <div className="h-9 w-24 rounded-md bg-neutral-200 dark:bg-neutral-700 animate-pulse" aria-hidden />
   }
 
   if (!user) {
@@ -31,29 +60,99 @@ export function AuthNav() {
     )
   }
 
+  const name = greetingName(profile, user.email ?? 'Usuario')
+
+  const handleLogout = async () => {
+    if (!isSupabaseConfigured()) return
+    setLogoutBusy(true)
+    const supabase = createBrowserSupabaseClient()
+    await supabase.auth.signOut()
+    setLogoutBusy(false)
+    setLogoutOpen(false)
+    window.location.href = '/login'
+  }
+
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
-      <Link
-        href="/settings/perfil"
-        className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 shrink-0"
-      >
-        Perfil
-      </Link>
-      <span className="hidden sm:inline text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[160px]">
-        {user.email}
-      </span>
+    <>
+      <AuthNavMenu
+        wrapRef={wrapRef}
+        name={name}
+        menuOpen={menuOpen}
+        setMenuOpen={setMenuOpen}
+        setLogoutOpen={setLogoutOpen}
+      />
+
+      <ConfirmDialog
+        open={logoutOpen}
+        title="¿Cerrar sesión?"
+        message="¿Seguro que quieres cerrar sesión? Tendrás que volver a iniciar sesión para acceder a tus prospectos y listas."
+        confirmLabel="Sí, cerrar sesión"
+        cancelLabel="Cancelar"
+        confirmVariant="danger"
+        busy={logoutBusy}
+        onConfirm={() => void handleLogout()}
+        onCancel={() => setLogoutOpen(false)}
+      />
+    </>
+  )
+}
+
+function AuthNavMenu({
+  wrapRef,
+  name,
+  menuOpen,
+  setMenuOpen,
+  setLogoutOpen,
+}: {
+  wrapRef: React.RefObject<HTMLDivElement | null>
+  name: string
+  menuOpen: boolean
+  setMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void
+  setLogoutOpen: (v: boolean) => void
+}) {
+  return (
+    <div className="relative" ref={wrapRef}>
       <button
         type="button"
-        onClick={async () => {
-          if (!isSupabaseConfigured()) return
-          const supabase = createBrowserSupabaseClient()
-          await supabase.auth.signOut()
-          window.location.reload()
-        }}
-        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white px-2 py-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+        onClick={() => setMenuOpen(v => !v)}
+        className={cn(
+          'flex items-center gap-1 max-w-[10rem] sm:max-w-[14rem] rounded-lg px-2 py-1.5 text-xs sm:text-sm font-medium text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors',
+          menuOpen && 'bg-neutral-100 dark:bg-neutral-800',
+        )}
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
       >
-        Salir
+        <span className="truncate">Hola, {name}</span>
+        <ChevronDown size={14} className={cn('shrink-0 transition-transform', menuOpen && 'rotate-180')} />
       </button>
+
+      {menuOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1.5 z-[60] w-44 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg p-1.5 flex flex-col gap-1"
+        >
+          <Link
+            href="/settings/perfil"
+            role="menuitem"
+            onClick={() => setMenuOpen(false)}
+            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          >
+            <Settings size={14} className="shrink-0" />
+            Configuración
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false)
+              setLogoutOpen(true)
+            }}
+            className="w-full rounded-lg px-3 py-2 text-xs font-semibold bg-red-600 text-white hover:bg-red-700 text-left"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      )}
     </div>
   )
 }

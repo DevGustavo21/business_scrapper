@@ -37,20 +37,157 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
+type DireccionSplit = { direccion: string; ciudad: string; pais: string }
+
+/** Ciudad/país inferidos del campo «ubicación» de la búsqueda cuando Maps no los separa. */
+function parseUbicacionFallback(ubicacion: string): { ciudad: string; pais: string } {
+  const parts = ubicacion
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean)
+  if (parts.length >= 2) return { ciudad: parts[0], pais: parts[parts.length - 1] }
+  if (parts.length === 1) return { ciudad: parts[0], pais: parts[0] }
+  return { ciudad: '', pais: '' }
+}
+
 /**
  * Separa el texto de dirección típico de Maps/directorio (segmentos por comas)
  * en calle / ciudad / país. Heurística: con 3+ partes, última = país, penúltima = ciudad.
  */
-function splitDireccionResultado(raw: string): { direccion: string; ciudad: string; pais: string } {
+function splitDireccionResultado(raw: string, ubicacionFallback = ''): DireccionSplit {
   const t = raw.replace(/\s+/g, ' ').trim()
-  if (!t) return { direccion: '', ciudad: '', pais: '' }
+  const fb = parseUbicacionFallback(ubicacionFallback)
+  if (!t) return { direccion: '', ciudad: fb.ciudad, pais: fb.pais }
   const parts = t.split(',').map(p => p.trim()).filter(Boolean)
-  if (parts.length === 1) return { direccion: parts[0], ciudad: '', pais: '' }
-  if (parts.length === 2) return { direccion: parts[0], ciudad: parts[1], pais: '' }
-  const pais = parts[parts.length - 1] ?? ''
-  const ciudad = parts[parts.length - 2] ?? ''
+  if (parts.length === 1) {
+    return { direccion: parts[0], ciudad: fb.ciudad, pais: fb.pais }
+  }
+  if (parts.length === 2) {
+    return {
+      direccion: parts[0],
+      ciudad: parts[1] || fb.ciudad,
+      pais: fb.pais,
+    }
+  }
+  const pais = parts[parts.length - 1] ?? fb.pais
+  const ciudad = parts[parts.length - 2] ?? fb.ciudad
   const direccion = parts.slice(0, -2).join(', ')
-  return { direccion, ciudad, pais }
+  return { direccion, ciudad: ciudad || fb.ciudad, pais: pais || fb.pais }
+}
+
+function normalizePhoneText(raw: string): string {
+  const t = raw.replace(/\s+/g, ' ').trim()
+  const digits = t.replace(/\D/g, '')
+  if (digits.length < 7) return ''
+  return t.slice(0, 48)
+}
+
+function isGoogleOwnedUrl(url: string): boolean {
+  return /^https?:\/\/(www\.)?(google\.|g\.page|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(url.trim())
+}
+
+function extractPlaceIdFromMapsUrl(href: string): string | null {
+  try {
+    const u = new URL(href)
+    for (const key of ['place_id', 'query_place_id']) {
+      const v = u.searchParams.get(key)?.trim()
+      if (v && /^ChIJ/i.test(v)) return v
+    }
+    const fromData = u.href.match(/[!/]1s(ChIJ[A-Za-z0-9_-]+)/i)
+    if (fromData?.[1]) return fromData[1]
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+type ContactFields = {
+  direccion: string
+  ciudad: string
+  pais: string
+  telefono: string
+  sitioWeb: string
+  correo: string
+}
+
+function mergeContactFields(base: ContactFields, patch: Partial<ContactFields>): ContactFields {
+  const pick = (a: string, b?: string) => (a.trim() ? a.trim() : (b ?? '').trim())
+  const sitio = pick(base.sitioWeb, patch.sitioWeb)
+  const sitioClean = sitio && !isGoogleOwnedUrl(sitio) ? sitio : pick('', patch.sitioWeb)
+  return {
+    direccion: pick(base.direccion, patch.direccion),
+    ciudad: pick(base.ciudad, patch.ciudad),
+    pais: pick(base.pais, patch.pais),
+    telefono: pick(base.telefono, patch.telefono),
+    sitioWeb: sitioClean,
+    correo: pick(base.correo, patch.correo),
+  }
+}
+
+/** Completa teléfono, web, dirección y correo vía Places Details cuando el DOM de Maps falla. */
+async function enrichContactFromPlacesApi(
+  input: {
+    mapsUrl?: string
+    nombre: string
+    ubicacion: string
+    direccionMaps?: string
+  },
+  partial: ContactFields,
+): Promise<ContactFields> {
+  const key = placesServerApiKey()
+  if (!key) return partial
+
+  let pid = input.mapsUrl ? extractPlaceIdFromMapsUrl(input.mapsUrl) : null
+  if (!pid) {
+    const q = [input.nombre, partial.direccion || input.direccionMaps, input.ubicacion]
+      .filter(Boolean)
+      .join(', ')
+    pid = await findPlaceIdByTextQuery(q, key)
+  }
+  if (!pid) return partial
+
+  const det = await fetchGooglePlaceDetailsResult(pid, key)
+  if (!det) return partial
+
+  const addr = (det.formatted_address ?? '').trim()
+  const addrSplit = addr ? splitDireccionResultado(addr, input.ubicacion) : { direccion: '', ciudad: '', pais: '' }
+  const web = (det.website ?? '').trim()
+  const sitioWeb =
+    web && !isGoogleOwnedUrl(web) ? web : partial.sitioWeb && !isGoogleOwnedUrl(partial.sitioWeb) ? partial.sitioWeb : ''
+
+  let correo = partial.correo
+  if (!correo.trim() && sitioWeb && scrapeWantsFetchEmailFromWeb()) {
+    correo = await scrapeFetchEmailFromUrl(sitioWeb)
+  }
+
+  return mergeContactFields(partial, {
+    direccion: addrSplit.direccion || partial.direccion,
+    ciudad: addrSplit.ciudad || partial.ciudad,
+    pais: addrSplit.pais || partial.pais,
+    telefono: (det.international_phone_number ?? det.formatted_phone_number ?? '').trim(),
+    sitioWeb,
+    correo,
+  })
+}
+
+/** Teléfono y fragmentos de dirección en el aria-label de la tarjeta del listado. */
+function parseFeedHintExtras(hint: string): { telefono: string; rawAddr: string } {
+  const parts = hint.split('·').map(s => s.trim()).filter(Boolean)
+  let telefono = ''
+  let rawAddr = ''
+  for (const p of parts) {
+    if (!telefono && /(?:\+?\d[\d\s().\-]{6,}\d)/.test(p) && !p.includes('@')) {
+      const m = p.match(/(?:\+?\d[\d\s().\-]{6,}\d)/)
+      if (m) telefono = normalizePhoneText(m[0])
+    }
+    if (!rawAddr && p.length >= 6 && (p.includes(',') || /\d{2,}/.test(p)) && !/^\$/.test(p) && !/reseñas|reviews/i.test(p)) {
+      if (!/^(restaurant|cafe|bar|hotel|store)$/i.test(p)) rawAddr = p
+    }
+  }
+  if (!rawAddr) rawAddr = direccionLiteFromHint(hint)
+  return { telefono, rawAddr }
 }
 
 // Bloqueo de assets por URL (evita globs complejos en page.route).
@@ -203,77 +340,57 @@ async function fetchGooglePlaceDetailsResult(
   }
 }
 
+/** Respaldo: solo negocios que no se emitieron tras abrir la ficha en Maps. */
 async function tryEmitLiteFromMapsFeed(
   emit: ScrapeEmit,
-  visitedPlaceUrls: Set<string>,
   feedHints: FeedPlaceHint[],
   ubicacion: string,
   log: (m: string) => void,
 ): Promise<number> {
-  const apiKey = placesServerApiKey()
   let added = 0
   for (const { href, hint } of feedHints) {
     if (emit.timeUp() || emit.full()) break
     const placeKey = mapsPlaceDedupeKey(href)
-    if (visitedPlaceUrls.has(placeKey)) continue
+    if (emit.hasEmitted(placeKey)) continue
     const nombre = cleanFeedHintName(hint)
     if (!nombre) continue
-    const rawAddr = direccionLiteFromHint(hint)
-    let { direccion, ciudad, pais } = splitDireccionResultado(rawAddr)
-    let telefono = ''
-    let sitioWeb = ''
-    let correo = ''
 
-    if (apiKey) {
-      const q = [nombre, rawAddr || ubicacion].filter(Boolean).join(', ')
-      const pid = await findPlaceIdByTextQuery(q, apiKey)
-      if (pid) {
-        const det = await fetchGooglePlaceDetailsResult(pid, apiKey)
-        if (det?.formatted_address) {
-          const s = splitDireccionResultado(det.formatted_address.trim())
-          if (s.direccion || s.ciudad || s.pais) {
-            direccion = s.direccion
-            ciudad = s.ciudad
-            pais = s.pais
-          }
-        }
-        telefono = (det?.international_phone_number ?? det?.formatted_phone_number ?? '').trim()
-        const w = (det?.website ?? '').trim()
-        const mapsUrl = (det?.url ?? '').trim()
-        sitioWeb = w || mapsUrl
-        const webForMail = w && !/^https?:\/\/(www\.)?google\./i.test(w) ? w : ''
-        if (webForMail && scrapeWantsFetchEmailFromWeb())
-          correo = await scrapeFetchEmailFromUrl(webForMail)
-      }
-    }
+    const extras = parseFeedHintExtras(hint)
+    const rawAddr = extras.rawAddr || direccionLiteFromHint(hint)
+    let contact = splitDireccionResultado(rawAddr, ubicacion) as ContactFields
+    contact.telefono = extras.telefono
+    contact.sitioWeb = ''
+    contact.correo = ''
+
+    contact = await enrichContactFromPlacesApi(
+      { mapsUrl: href, nombre, ubicacion, direccionMaps: rawAddr },
+      contact,
+    )
 
     let problemasDetectados = MAPS_LITE_PROBLEMAS
     let oportunidades = MAPS_LITE_OPORTUNIDADES
-    const tieneWebNegocio = !!(sitioWeb && !/^https?:\/\/(www\.)?google\./i.test(sitioWeb))
-    if (telefono || tieneWebNegocio) {
+    const tieneWebNegocio = !!(contact.sitioWeb && !isGoogleOwnedUrl(contact.sitioWeb))
+    if (contact.telefono || tieneWebNegocio || contact.correo) {
       problemasDetectados =
-        'Datos ampliados con Google Places (o visibles en el listado); conviene validarlos en la ficha del negocio. Sin auditoría automática del sitio web.'
+        'Datos desde listado de Maps y/o Google Places; conviene validar en la ficha. Sin auditoría automática del sitio web.'
       oportunidades = MAPS_LITE_OPORTUNIDADES
     }
 
     const ok = emit.tryEmit(placeKey, {
       nombre,
-      direccion,
-      ciudad,
-      pais,
-      telefono,
-      correo,
-      sitioWeb,
+      direccion: contact.direccion,
+      ciudad: contact.ciudad,
+      pais: contact.pais,
+      telefono: contact.telefono,
+      correo: contact.correo,
+      sitioWeb: contact.sitioWeb,
       problemasDetectados,
       oportunidades,
       estado: 'Sin contactar',
     })
-    if (ok) {
-      visitedPlaceUrls.add(placeKey)
-      added++
-    }
+    if (ok) added++
   }
-  if (added > 0) log(`[scraper] Maps: filas desde listado sin abrir ficha=${added}`)
+  if (added > 0) log(`[scraper] Maps: respaldo listado/API sin ficha completa=${added}`)
   return added
 }
 
@@ -441,6 +558,13 @@ async function extractMapsPlaceTitle(page: Page): Promise<string> {
 
 /** NAP en ficha Maps: varios selectores + texto en panel (DOM cambia con frecuencia). */
 async function extractMapsPlaceNap(page: Page): Promise<{ direccionMaps: string; telefono: string; sitioWeb: string }> {
+  await page
+    .locator('button[data-item-id="address"], button[data-item-id^="phone"], a[data-item-id="authority"]')
+    .first()
+    .waitFor({ state: 'attached', timeout: 3500 })
+    .catch(() => {})
+  await delay(280, 520)
+
   const nap = await page.evaluate(() => {
     const txt = (el: Element | null | undefined) => (el?.textContent || '').replace(/\s+/g, ' ').trim()
     let direccionMaps = txt(document.querySelector('[data-item-id="address"]'))
@@ -478,6 +602,11 @@ async function extractMapsPlaceNap(page: Page): Promise<{ direccionMaps: string;
           sitioWeb = h
         }
       })
+    }
+    if (!telefono) {
+      const body = document.body?.innerText || ''
+      const pm = body.match(/(?:\+?\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b/)
+      if (pm) telefono = pm[0].trim()
     }
     return { direccionMaps, telefono, sitioWeb }
   })
@@ -673,6 +802,7 @@ export type ScrapeEmit = {
   timeUp: () => boolean
   full: () => boolean
   count: () => number
+  hasEmitted: (dedupeKey: string) => boolean
   /** Amplía el plazo (p. ej. fallback Places tras Maps). */
   extendDeadline: (extraMs: number) => void
   /** `dedupeKey` debe ser estable y único por negocio (p. ej. URL normalizada de Maps). */
@@ -693,6 +823,9 @@ export function createScrapeEmit(
     timeUp: () => Date.now() >= deadline,
     full: () => c >= cantidad,
     count: () => c,
+    hasEmitted(dedupeKey: string) {
+      return seen.has(dedupeKey.trim().toLowerCase())
+    },
     extendDeadline(extraMs: number) {
       const add = Math.max(0, Math.floor(extraMs))
       deadline = Math.max(deadline, Date.now() + add)
@@ -785,54 +918,59 @@ async function scrapeGoogleMaps(
           log(`[scraper] Maps: sin nombre (intento ${fails}/2) ${placeKey.slice(0, 80)}`)
           return
         }
+        const feedHint = hintByPlaceKey.get(placeKey) ?? ''
+        const feedExtras = feedHint ? parseFeedHintExtras(feedHint) : { telefono: '', rawAddr: '' }
+
         const { direccionMaps, telefono, sitioWeb } = await extractMapsPlaceNap(dp)
-        const sw = sitioWeb.trim()
-        let correo: string
+        let contact = mergeContactFields(
+          {
+            ...splitDireccionResultado(direccionMaps || feedExtras.rawAddr, ubicacion),
+            telefono: normalizePhoneText(telefono || feedExtras.telefono),
+            sitioWeb: sitioWeb.trim(),
+            correo: '',
+          },
+          {},
+        )
+
+        contact = await enrichContactFromPlacesApi(
+          { mapsUrl: link, nombre, ubicacion, direccionMaps },
+          contact,
+        )
+
+        const sw = contact.sitioWeb
+        let correo = contact.correo
         let problemasDetectados: string
         let oportunidades: string
-        if (mapsWantsDeepWebAudit()) {
-          if (!sw) {
-            const r = await auditFromWebsite(browser, sitioWeb)
-            correo = r.correo
-            problemasDetectados = r.problemasDetectados
-            oportunidades = r.oportunidades
-          } else if (auditBudget.n > 0) {
+        if (mapsWantsDeepWebAudit() && sw && !isGoogleOwnedUrl(sw)) {
+          if (auditBudget.n > 0) {
             auditBudget.n--
             const auditMs = process.env.VERCEL ? 4_800 : 6_500
-            const r = await withTimeout(auditFromWebsite(browser, sitioWeb), auditMs, auditFallback)
-            correo = r.correo
+            const r = await withTimeout(auditFromWebsite(browser, sw), auditMs, auditFallback)
+            correo = r.correo || correo
             problemasDetectados = r.problemasDetectados
             oportunidades = r.oportunidades
           } else {
             const p = placeholderAuditPendiente()
-            correo = p.correo
             problemasDetectados = p.problemasDetectados
             oportunidades = p.oportunidades
           }
         } else {
           const p = placeholderAuditPendiente()
-          correo = p.correo
           problemasDetectados = p.problemasDetectados
           oportunidades = p.oportunidades
         }
-        if (
-          !correo.trim() &&
-          sw &&
-          scrapeWantsFetchEmailFromWeb() &&
-          !/^https?:\/\/(www\.)?google\./i.test(sw)
-        ) {
+        if (!correo.trim() && sw && scrapeWantsFetchEmailFromWeb() && !isGoogleOwnedUrl(sw)) {
           correo = await scrapeFetchEmailFromUrl(sw)
         }
         if (emit.timeUp()) return
-        const { direccion, ciudad, pais } = splitDireccionResultado(direccionMaps)
         const emitted = emit.tryEmit(placeKey, {
           nombre: nombre.trim(),
-          direccion,
-          ciudad,
-          pais,
-          telefono: telefono.trim(),
+          direccion: contact.direccion,
+          ciudad: contact.ciudad,
+          pais: contact.pais,
+          telefono: contact.telefono,
           correo: correo.trim(),
-          sitioWeb: sw || sitioWeb.trim(),
+          sitioWeb: sw,
           problemasDetectados,
           oportunidades,
           estado: 'Sin contactar',
@@ -875,8 +1013,6 @@ async function scrapeGoogleMaps(
         const cleaned = cleanFeedHintName(hint)
         if (cleaned && !hintByPlaceKey.has(k)) hintByPlaceKey.set(k, cleaned)
       }
-      await tryEmitLiteFromMapsFeed(emit, visitedPlaceUrls, feedHints, ubicacion, log)
-
       const linkSet = new Set<string>(links)
       for (const { href } of feedHints) {
         if (href.trim()) linkSet.add(href.trim())
@@ -932,6 +1068,10 @@ async function scrapeGoogleMaps(
           })(),
         ),
       )
+
+      if (!emit.full() && !emit.timeUp()) {
+        await tryEmitLiteFromMapsFeed(emit, feedHints, ubicacion, log)
+      }
     }
   } finally {
     await page.context().close().catch(() => {})
@@ -1014,7 +1154,7 @@ async function scrapePaginasAmarillas(
           correo = await scrapeFetchEmailFromUrl(sw)
         }
         if (emit.timeUp()) break
-        const { direccion, ciudad, pais } = splitDireccionResultado(direccionListado)
+        const { direccion, ciudad, pais } = splitDireccionResultado(direccionListado, ubicacion)
         const paKey = `pa|${nombre}|${telefono}|${sitioWeb}|${direccionListado}`.toLowerCase().slice(0, 400)
         emit.tryEmit(paKey, {
           nombre,
@@ -1100,11 +1240,11 @@ async function scrapeGooglePlacesTextSearchApi(
       const dedupe = `gplaces|${pid}`
       const det = await fetchGooglePlaceDetailsResult(pid, key)
       const addrStr = (det?.formatted_address ?? r.formatted_address ?? '').trim()
-      const { direccion, ciudad, pais } = splitDireccionResultado(addrStr)
+      const { direccion, ciudad, pais } = splitDireccionResultado(addrStr, ubicacion)
       const telefono = (det?.international_phone_number ?? det?.formatted_phone_number ?? '').trim()
       const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(pid)}`
-      let sitioWeb = (det?.website ?? '').trim() || (det?.url ?? '').trim()
-      if (!sitioWeb) sitioWeb = mapsLink
+      let sitioWeb = (det?.website ?? '').trim()
+      if (!sitioWeb || isGoogleOwnedUrl(sitioWeb)) sitioWeb = mapsLink
       let correo = ''
       const webForMail = (det?.website ?? '').trim()
       if (webForMail && scrapeWantsFetchEmailFromWeb() && !/^https?:\/\/(www\.)?google\./i.test(webForMail))
@@ -1214,6 +1354,11 @@ export async function streamScrapeNegocios(
   if (!mapsWantsDeepWebAudit()) {
     log(
       '[scraper] Modo rápido: sin auditoría web por negocio en Maps (ni PA). Más filas antes del timeout. Para auditar sitios: SCRAPE_MAPS_WEB_AUDIT=1 y/o SCRAPE_PA_WEB_AUDIT=1.',
+    )
+  }
+  if (!placesServerApiKey()) {
+    log(
+      '[scraper] Sin GOOGLE_PLACES_API_KEY: teléfono, web y correo dependen del DOM de Maps (más fallos). Añade la clave en .env.local para enriquecer cada ficha.',
     )
   }
 

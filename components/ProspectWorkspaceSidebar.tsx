@@ -119,7 +119,6 @@ export function ProspectWorkspaceSidebar({
   const [mentionPick, setMentionPick] = useState<ProspectListMemberRow[]>([])
   const taRef = useRef<HTMLTextAreaElement>(null)
   const messagesScrollRef = useRef<HTMLDivElement>(null)
-  const scrollMessagesToBottomRef = useRef(false)
 
   const loadMembers = useCallback(async () => {
     if (target.kind === 'search_row') {
@@ -173,22 +172,23 @@ export function ProspectWorkspaceSidebar({
     void loadWorkspace()
   }, [loadWorkspace, refreshKey])
 
-  useEffect(() => {
-    scrollMessagesToBottomRef.current = false
+  const scrollMessagesToEnd = useCallback(() => {
     const el = messagesScrollRef.current
-    if (el) el.scrollTop = 0
-  }, [target, refreshKey])
+    if (!el) return
+    const apply = () => {
+      el.scrollTop = el.scrollHeight
+    }
+    apply()
+    requestAnimationFrame(apply)
+  }, [])
 
   useLayoutEffect(() => {
-    const el = messagesScrollRef.current
-    if (!el || messages.length === 0) return
-    if (scrollMessagesToBottomRef.current) {
-      el.scrollTop = el.scrollHeight
-      scrollMessagesToBottomRef.current = false
-    } else {
-      el.scrollTop = 0
-    }
-  }, [messages])
+    if (messages.length > 0) scrollMessagesToEnd()
+  }, [messages, scrollMessagesToEnd])
+
+  useLayoutEffect(() => {
+    scrollMessagesToEnd()
+  }, [target, refreshKey, scrollMessagesToEnd])
 
   const updateMentionUi = (text: string, cursor: number) => {
     const before = text.slice(0, cursor)
@@ -240,7 +240,6 @@ export function ProspectWorkspaceSidebar({
     if (error) onError?.(error.message)
     else {
       setMsgBody('')
-      scrollMessagesToBottomRef.current = true
       const m = await listThreadMessagesForTarget(sb, target)
       if (!m.error) setMessages(m.data ?? [])
     }

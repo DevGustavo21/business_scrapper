@@ -20,6 +20,14 @@ const MID_COLS: { key: keyof NegocioFila; label: string }[] = [
   { key: 'oportunidades', label: 'Oportunidades' },
 ]
 
+const WEBSITE_LABEL_MAX = 30
+
+function websiteDisplayLabel(url: string): string {
+  const label = url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  if (label.length <= WEBSITE_LABEL_MAX) return label
+  return `${label.slice(0, WEBSITE_LABEL_MAX)}…`
+}
+
 function CellText({ text, narrow }: { text: string; narrow?: boolean }) {
   const t = text || '—'
   return (
@@ -333,16 +341,17 @@ export function ResultsTable({
                   }
                   if (k === 'sitioWeb')
                     return (
-                      <td key={k} className="px-3 py-3 max-w-[140px]">
+                      <td key={k} className="px-3 py-3 max-w-[11rem]">
                         {n.sitioWeb ? (
                           <a
                             href={n.sitioWeb}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 text-xs break-all"
+                            title={n.sitioWeb}
+                            className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 text-xs max-w-full"
                             onClick={e => e.stopPropagation()}
                           >
-                            {n.sitioWeb.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                            <span className="truncate">{websiteDisplayLabel(n.sitioWeb)}</span>
                             <ExternalLink size={12} className="shrink-0" />
                           </a>
                         ) : (
