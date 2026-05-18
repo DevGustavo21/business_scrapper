@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Building2, Menu, X } from 'lucide-react'
+import { Building2, Clock, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AuthNav } from '@/components/AuthNav'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -75,16 +75,6 @@ function HeaderInner({
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
-        {showMobileHistoryTrigger && (
-          <button
-            type="button"
-            aria-label="Abrir historial de búsquedas"
-            className="lg:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            onClick={onOpenMobileHistory}
-          >
-            <Menu size={20} />
-          </button>
-        )}
         <button
           type="button"
           aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú de navegación'}
@@ -122,6 +112,17 @@ function HeaderInner({
       </nav>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {showMobileHistoryTrigger && (
+          <button
+            type="button"
+            aria-label="Abrir historial de búsquedas"
+            title="Historial de búsquedas"
+            className="sm:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-indigo-600 dark:hover:text-indigo-400"
+            onClick={onOpenMobileHistory}
+          >
+            <Clock size={20} />
+          </button>
+        )}
         <NotificationsPopover />
         <div className="hidden sm:block">
           <ThemeToggle />

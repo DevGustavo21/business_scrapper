@@ -17,31 +17,49 @@ export type ProspectBlacklistRow = {
   created_at: string
 }
 
+export async function fetchBlacklistFingerprints(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ keys: string[]; error: Error | null }> {
+  const { data, error } = await supabase.from('prospect_blacklist').select('fingerprint').eq('user_id', userId)
+  if (error) return { keys: [], error: new Error(error.message) }
+  const keys = (data ?? [])
+    .map(r => (r as { fingerprint?: string }).fingerprint)
+    .filter((f): f is string => typeof f === 'string' && f.length > 0)
+  return { keys, error: null }
+}
+
 export async function fetchExcludeFingerprintsForSearch(
   supabase: SupabaseClient,
   userId: string,
   categoria: string,
   ubicacion: string,
+  opts?: { includePriorSearchResults?: boolean },
 ): Promise<{ keys: string[]; error: Error | null }> {
+  const includePrior = opts?.includePriorSearchResults !== false
   const { categoria_norm, ubicacion_norm } = normalizeSearchCategoryUbicacion(categoria, ubicacion)
-  const [bl, fp] = await Promise.all([
-    supabase.from('prospect_blacklist').select('fingerprint').eq('user_id', userId),
-    supabase
-      .from('search_result_fingerprints')
-      .select('fingerprint')
-      .eq('user_id', userId)
-      .eq('categoria_norm', categoria_norm)
-      .eq('ubicacion_norm', ubicacion_norm),
-  ])
-  const err = bl.error ?? fp.error
-  if (err) return { keys: [], error: new Error(err.message) }
+  const bl = await supabase.from('prospect_blacklist').select('fingerprint').eq('user_id', userId)
+  if (bl.error) return { keys: [], error: new Error(bl.error.message) }
+
   const set = new Set<string>()
   for (const r of bl.data ?? []) {
     if (typeof (r as { fingerprint?: string }).fingerprint === 'string') set.add((r as { fingerprint: string }).fingerprint)
   }
-  for (const r of fp.data ?? []) {
-    if (typeof (r as { fingerprint?: string }).fingerprint === 'string') set.add((r as { fingerprint: string }).fingerprint)
+
+  if (includePrior) {
+    const fp = await supabase
+      .from('search_result_fingerprints')
+      .select('fingerprint')
+      .eq('user_id', userId)
+      .eq('categoria_norm', categoria_norm)
+      .eq('ubicacion_norm', ubicacion_norm)
+    if (fp.error) return { keys: [], error: new Error(fp.error.message) }
+    for (const r of fp.data ?? []) {
+      if (typeof (r as { fingerprint?: string }).fingerprint === 'string')
+        set.add((r as { fingerprint: string }).fingerprint)
+    }
   }
+
   return { keys: [...set], error: null }
 }
 

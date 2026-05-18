@@ -136,6 +136,7 @@ async function enrichContactFromPlacesApi(
   },
   partial: ContactFields,
 ): Promise<ContactFields> {
+  if (!placesApiUsableCached()) return partial
   const key = placesServerApiKey()
   if (!key) return partial
 
@@ -212,6 +213,10 @@ async function newPage(browser: Browser, opts?: { locale?: string }): Promise<Pa
  * y solo se emitía un negocio aunque el feed mostrara muchas filas.
  */
 function mapsPlaceDedupeKey(href: string): string {
+  const chij = href.match(/[!/]1s(ChIJ[A-Za-z0-9_-]+)/i)?.[1]
+  if (chij) return `chij|${chij.toLowerCase()}`
+  const hex = href.match(/[!/]1s(0x[a-f0-9]+:0x[a-f0-9]+)/i)?.[1]
+  if (hex) return `hex|${hex.toLowerCase()}`
   try {
     const u = new URL(href)
     const host = u.hostname.toLowerCase()
@@ -705,6 +710,42 @@ function placesServerApiKey(): string {
   )
 }
 
+let placesApiServerUsableCache: boolean | null = null
+
+/** La clave debe permitir llamadas desde el servidor (IP o sin restricción), no solo Referer web. */
+async function placesApiWorksOnServer(key: string, log: (m: string) => void): Promise<boolean> {
+  if (placesApiServerUsableCache !== null) return placesApiServerUsableCache
+  const u = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
+  u.searchParams.set('query', 'restaurant')
+  u.searchParams.set('key', key)
+  try {
+    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(10_000) })
+    const data = (await res.json()) as { status?: string; error_message?: string }
+    const msg = data.error_message ?? ''
+    if (data.status === 'REQUEST_DENIED' && /referer/i.test(msg)) {
+      placesApiServerUsableCache = false
+      log(
+        '[scraper] GOOGLE_PLACES_API_KEY con restricción «Referer»: no funciona en el servidor. En Google Cloud → Credentials crea otra clave con restricción «IP» (o ninguna en desarrollo) y Places API activada.',
+      )
+      return false
+    }
+    placesApiServerUsableCache =
+      data.status === 'OK' || data.status === 'ZERO_RESULTS' || data.status === 'OVER_QUERY_LIMIT'
+    if (!placesApiServerUsableCache) {
+      log(`[scraper] Places API no disponible: status=${data.status ?? '?'} ${msg}`.trim())
+    }
+    return placesApiServerUsableCache
+  } catch (e) {
+    placesApiServerUsableCache = false
+    log(`[scraper] Places API: error de red (${e instanceof Error ? e.message : String(e)})`)
+    return false
+  }
+}
+
+function placesApiUsableCached(): boolean {
+  return placesApiServerUsableCache === true
+}
+
 const SIN_WEB_PROBLEMAS =
   'No hay sitio web enlazado o la URL está vacía: no se puede auditar rendimiento, accesibilidad ni SEO del dominio propio desde el listado.'
 const SIN_WEB_OPORTUNIDADES =
@@ -904,7 +945,8 @@ async function scrapeGoogleMaps(
         const placeGotoMs = process.env.VERCEL ? 18_000 : 22_000
         await dp.goto(link, { waitUntil: NAV_WAIT, timeout: placeGotoMs })
         if (emit.timeUp()) return
-        await delay(process.env.VERCEL ? 550 : 400, process.env.VERCEL ? 900 : 750)
+        await dismissMapsOverlays(dp, log)
+        await delay(process.env.VERCEL ? 700 : 550, process.env.VERCEL ? 1100 : 900)
         let nombre = (await extractMapsPlaceTitle(dp)).trim()
         if (!nombre) nombre = fallbackNombreFromMapsUrl(link)
         if (!nombre) {
@@ -985,17 +1027,21 @@ async function scrapeGoogleMaps(
     }
 
     let stagnant = 0
-    while (!emit.full() && !emit.timeUp() && stagnant < 22) {
+    const stagnantLimit = () =>
+      emit.count() < Math.max(4, Math.ceil(cantidadSolicitada * 0.45)) ? 36 : 22
+
+    while (!emit.full() && !emit.timeUp() && stagnant < stagnantLimit()) {
       const hasFeed = (await page.locator('[role="feed"]').count()) > 0
       if (hasFeed) {
         await feedLoc.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
         await feedLoc.press('End').catch(() => {})
         await delay(280, 520)
-        const scrollSteps = Math.min(42, Math.max(22, Math.ceil(cantidadSolicitada * 2.8)))
+        const scrollSteps = Math.min(56, Math.max(28, Math.ceil(cantidadSolicitada * 3.2)))
         for (let s = 0; s < scrollSteps && !emit.timeUp() && !emit.full(); s++) {
-          await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 1400) }, { timeout: 3200 }).catch(() => {})
-          await delay(120, 280)
+          await feedLoc.evaluate((el) => { (el as HTMLElement).scrollBy(0, 1600) }, { timeout: 3200 }).catch(() => {})
+          await delay(180, 360)
         }
+        await delay(500, 900)
       } else {
         log('[scraper] Maps: sin panel [role=feed]; scroll con rueda')
         for (let s = 0; s < 18 && !emit.timeUp(); s++) {
@@ -1356,14 +1402,27 @@ export async function streamScrapeNegocios(
       '[scraper] Modo rápido: sin auditoría web por negocio en Maps (ni PA). Más filas antes del timeout. Para auditar sitios: SCRAPE_MAPS_WEB_AUDIT=1 y/o SCRAPE_PA_WEB_AUDIT=1.',
     )
   }
-  if (!placesServerApiKey()) {
+  const placesKey = placesServerApiKey()
+  let placesApiOk = false
+  if (placesKey) {
+    placesApiOk = await placesApiWorksOnServer(placesKey, log)
+  } else {
     log(
-      '[scraper] Sin GOOGLE_PLACES_API_KEY: teléfono, web y correo dependen del DOM de Maps (más fallos). Añade la clave en .env.local para enriquecer cada ficha.',
+      '[scraper] Sin GOOGLE_PLACES_API_KEY: teléfono, web y correo dependen del DOM de Maps. Añade la clave en .env.local.',
     )
   }
 
   try {
     const auditBudget = { n: auditBudgetForRun(requested) }
+
+    if (placesApiOk && !emit.full()) {
+      log('[scraper] Fase 1: Google Places API (datos completos)')
+      await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
+        console.error('[scraper] Places API (fase 1) failed:', err instanceof Error ? err.message : err)
+      })
+      log(`[scraper] tras Places API → ${emit.count()}/${requested}`)
+    }
+
     let round = 0
     while (!emit.full() && !emit.timeUp()) {
       round++
@@ -1406,15 +1465,11 @@ export async function streamScrapeNegocios(
       }
     }
 
-    const hasPlacesKey = !!(
-      process.env.GOOGLE_PLACES_API_KEY?.trim() ||
-      process.env.GOOGLE_MAPS_API_KEY?.trim()
-    )
-    if (emit.count() < requested && hasPlacesKey) {
-      emit.extendDeadline(70_000)
-      log('[scraper] fallback final: Google Places API (hasta completar cupo o agotar páginas)')
+    if (placesApiOk && emit.count() < requested) {
+      emit.extendDeadline(50_000)
+      log('[scraper] Fase final: Google Places API (completar cupo)')
       await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
-        console.error('[scraper] Places API failed:', err instanceof Error ? err.message : err)
+        console.error('[scraper] Places API (fase final) failed:', err instanceof Error ? err.message : err)
       })
     }
 

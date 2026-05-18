@@ -80,7 +80,10 @@ function HomeInner() {
   const negociosRef = useRef<NegocioFila[]>([])
   const activeSearchIdRef = useRef<string | null>(null)
   const persistTimerRef = useRef<number | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
+  const freshSearchExcludeRef = useRef(true)
 
+  const [searchFormKey, setSearchFormKey] = useState(0)
   const [historyItems, setHistoryItems] = useState<ProspectSearchListItem[]>([])
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null)
 
@@ -187,15 +190,22 @@ function HomeInner() {
   }, [user, refreshHistory, loadSearchById, urlSearchId])
 
   const handleNewChat = useCallback(() => {
-    if (loading) return
+    searchAbortRef.current?.abort()
+    searchAbortRef.current = null
     setActiveSearchId(null)
     writeStoredActiveSearchId(null)
     setNegocios([])
     setLastSearch({ categoria: '', ubicacion: '' })
     setRequestedQty(12)
     setError(null)
+    setSearchCompleteOpen(false)
+    setSearchCompleteSummary(null)
     setMobileHistoryOpen(false)
-  }, [loading])
+    setLoading(false)
+    freshSearchExcludeRef.current = true
+    setSearchFormKey(k => k + 1)
+    if (urlSearchId) router.replace('/', { scroll: false })
+  }, [urlSearchId, router])
 
   const handleDeleteSearch = useCallback(
     async (id: string) => {
@@ -393,11 +403,16 @@ function HomeInner() {
       let excludeFingerprints: string[] = []
       if (user && isSupabaseConfigured()) {
         const sbEx = createBrowserSupabaseClient()
-        const ex = await fetchExcludeFingerprintsForSearch(sbEx, user.id, categoria, ubicacion)
+        const ex = await fetchExcludeFingerprintsForSearch(sbEx, user.id, categoria, ubicacion, {
+          includePriorSearchResults: !freshSearchExcludeRef.current,
+        })
+        freshSearchExcludeRef.current = false
         if (!ex.error) excludeFingerprints = ex.keys
       }
 
+      searchAbortRef.current?.abort()
       const ctrl = new AbortController()
+      searchAbortRef.current = ctrl
       const clientMaxMs = SCRAPE_MAX_MS + 90_000
       const tid = window.setTimeout(() => ctrl.abort(), clientMaxMs)
       let buf = ''
@@ -599,7 +614,7 @@ function HomeInner() {
               compañero en una carpeta se abre en una vista aparte, no mezclada con tu historial.
             </p>
           </div>
-          <SearchPanel onSearch={handleSearch} loading={loading} />
+          <SearchPanel key={searchFormKey} onSearch={handleSearch} loading={loading} />
           {loading && (
             <p className="text-center text-sm text-neutral-500 dark:text-neutral-400 max-w-xl mx-auto -mt-4">
               Fuentes: <strong>Google Maps</strong> y, si hace falta, <strong>Páginas Amarillas</strong>. Las filas se van
