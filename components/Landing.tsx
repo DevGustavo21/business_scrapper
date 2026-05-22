@@ -276,7 +276,7 @@ function SocialProof() {
         <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-neutral-200/70 bg-neutral-200/70 sm:grid-cols-3 dark:border-white/5 dark:bg-white/5">
           <StatCard value="98%" label="de búsquedas completadas con datos limpios y deduplicados" />
           <StatCard value="7,2k+" label="negocios extraídos al mes por los equipos activos" />
-          <StatCard value="<4 min" label="tiempo medio de una búsqueda end-to-end" />
+          <StatCard value="<1 min" label="tiempo medio de una búsqueda end-to-end" />
         </div>
       </div>
     </section>

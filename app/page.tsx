@@ -10,6 +10,7 @@ import { SearchPanel } from '@/components/SearchPanel'
 import { ResultsTable } from '@/components/ResultsTable'
 import { ExportButton } from '@/components/ExportButton'
 import { Toast } from '@/components/Toast'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SearchCompleteDialog, type SearchCompleteSummary } from '@/components/SearchCompleteDialog'
 import {
   SearchHistorySidebar,
@@ -86,6 +87,11 @@ function HomeInner() {
 
   const [searchFormKey, setSearchFormKey] = useState(0)
   const [historyItems, setHistoryItems] = useState<ProspectSearchListItem[]>([])
+  /** Espejo de `historyItems` para leer desde callbacks sin re-render. */
+  const historyItemsRef = useRef<ProspectSearchListItem[]>([])
+  useEffect(() => {
+    historyItemsRef.current = historyItems
+  }, [historyItems])
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null)
 
   const [loading, setLoading] = useState(false)
@@ -119,6 +125,13 @@ function HomeInner() {
   const [shareNewListOpen, setShareNewListOpen] = useState(false)
   const [shareNewListId, setShareNewListId] = useState<string | null>(null)
   const [shareNewListTitle, setShareNewListTitle] = useState('')
+
+  /** Modal de confirmación para borrar una búsqueda del historial. */
+  const [deleteSearchTarget, setDeleteSearchTarget] = useState<ProspectSearchListItem | null>(null)
+  const [deleteSearchBusy, setDeleteSearchBusy] = useState(false)
+  /** Modal de confirmación para borrar una fila de la tabla de resultados. */
+  const [deleteRowTarget, setDeleteRowTarget] = useState<NegocioFila | null>(null)
+  const [deleteRowBusy, setDeleteRowBusy] = useState(false)
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured()) {
@@ -224,27 +237,40 @@ function HomeInner() {
     if (urlSearchId) router.replace('/', { scroll: false })
   }, [urlSearchId, router])
 
+  /** Abre el modal de confirmación; el borrado real lo dispara `confirmDeleteSearch`. */
   const handleDeleteSearch = useCallback(
-    async (id: string) => {
-      if (!user || !isSupabaseConfigured()) return
-      if (!window.confirm('¿Eliminar esta búsqueda del historial? No se puede deshacer.')) return
-      const sb = createBrowserSupabaseClient()
-      const { error: delErr } = await deleteProspectSearch(sb, id)
-      if (delErr) {
-        setError(formatProspectSearchError(delErr.message))
-        return
-      }
-      if (activeSearchIdRef.current === id) {
-        setActiveSearchId(null)
-        writeStoredActiveSearchId(null)
-        setNegocios([])
-        setLastSearch({ categoria: '', ubicacion: '' })
-        setRequestedQty(12)
-      }
-      await refreshHistory()
+    (id: string) => {
+      const item = historyItemsRef.current.find(it => it.id === id) ?? null
+      if (item) setDeleteSearchTarget(item)
     },
-    [user, refreshHistory],
+    [],
   )
+
+  const confirmDeleteSearch = useCallback(async () => {
+    const target = deleteSearchTarget
+    if (!target || !user || !isSupabaseConfigured()) {
+      setDeleteSearchTarget(null)
+      return
+    }
+    setDeleteSearchBusy(true)
+    const sb = createBrowserSupabaseClient()
+    const { error: delErr } = await deleteProspectSearch(sb, target.id)
+    setDeleteSearchBusy(false)
+    if (delErr) {
+      setError(formatProspectSearchError(delErr.message))
+      setDeleteSearchTarget(null)
+      return
+    }
+    if (activeSearchIdRef.current === target.id) {
+      setActiveSearchId(null)
+      writeStoredActiveSearchId(null)
+      setNegocios([])
+      setLastSearch({ categoria: '', ubicacion: '' })
+      setRequestedQty(12)
+    }
+    setDeleteSearchTarget(null)
+    await refreshHistory()
+  }, [deleteSearchTarget, user, refreshHistory])
 
   const handleEstadoChange = useCallback(
     (id: string, estado: ContactoEstado) => {
@@ -358,36 +384,37 @@ function HomeInner() {
     [user, scheduleCloudPersist],
   )
 
-  const handleDeleteNegocioRow = useCallback(
-    (row: NegocioFila) => {
-      if (
-        !window.confirm(
-          '¿Eliminar esta fila de los resultados? Se quitará de la búsqueda guardada. Si estaba como prospecto, también se borrará de Clientes prospectos.',
-        )
-      )
+  /** Abre el modal de confirmación para borrar la fila; el borrado real lo hace `confirmDeleteNegocioRow`. */
+  const handleDeleteNegocioRow = useCallback((row: NegocioFila) => {
+    setDeleteRowTarget(row)
+  }, [])
+
+  const confirmDeleteNegocioRow = useCallback(async () => {
+    const row = deleteRowTarget
+    if (!row) return
+    setDeleteRowBusy(true)
+    flushPersistTimer()
+    const sid = activeSearchIdRef.current
+    if (row.prospectRecordId && user && isSupabaseConfigured()) {
+      const { error: delErr } = await deleteClientProspectById(createBrowserSupabaseClient(), row.prospectRecordId)
+      if (delErr) {
+        setError(formatClientProspectError(delErr.message))
+        setDeleteRowBusy(false)
+        setDeleteRowTarget(null)
         return
-      flushPersistTimer()
-      const sid = activeSearchIdRef.current
-      void (async () => {
-        if (row.prospectRecordId && user && isSupabaseConfigured()) {
-          const { error: delErr } = await deleteClientProspectById(createBrowserSupabaseClient(), row.prospectRecordId)
-          if (delErr) {
-            setError(formatClientProspectError(delErr.message))
-            return
-          }
-        }
-        setNegocios(prev => {
-          const next = prev.filter(r => r.id !== row.id)
-          negociosRef.current = next
-          if (sid && user && isSupabaseConfigured()) {
-            void updateProspectSearchProgress(createBrowserSupabaseClient(), sid, next)
-          }
-          return next
-        })
-      })()
-    },
-    [user],
-  )
+      }
+    }
+    setNegocios(prev => {
+      const next = prev.filter(r => r.id !== row.id)
+      negociosRef.current = next
+      if (sid && user && isSupabaseConfigured()) {
+        void updateProspectSearchProgress(createBrowserSupabaseClient(), sid, next)
+      }
+      return next
+    })
+    setDeleteRowBusy(false)
+    setDeleteRowTarget(null)
+  }, [deleteRowTarget, user])
 
   const handleSearch = useCallback(
     async (categoria: string, ubicacion: string, cantidad: number) => {
@@ -819,6 +846,42 @@ function HomeInner() {
           />
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteSearchTarget)}
+        busy={deleteSearchBusy}
+        title="Eliminar búsqueda del historial"
+        message={
+          deleteSearchTarget
+            ? `Se eliminará «${deleteSearchTarget.categoria} · ${deleteSearchTarget.ubicacion}» del historial. Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        confirmVariant="danger"
+        onConfirm={() => void confirmDeleteSearch()}
+        onCancel={() => {
+          if (!deleteSearchBusy) setDeleteSearchTarget(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteRowTarget)}
+        busy={deleteRowBusy}
+        title="Eliminar negocio"
+        message={
+          deleteRowTarget
+            ? `Se quitará «${deleteRowTarget.nombre}» de los resultados y de la búsqueda guardada. Si estaba marcado como prospecto, también se borrará de Clientes prospectos.`
+            : ''
+        }
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        confirmVariant="danger"
+        onConfirm={() => void confirmDeleteNegocioRow()}
+        onCancel={() => {
+          if (!deleteRowBusy) setDeleteRowTarget(null)
+        }}
+      />
     </div>
   )
 }
