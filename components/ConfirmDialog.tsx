@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
 export function ConfirmDialog({
@@ -23,11 +25,33 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
-  if (!open) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
-  return (
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onCancel()
+    }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [open, busy, onCancel])
+
+  if (!open || !mounted) return null
+
+  const dialog = (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-label="Cerrar" onClick={onCancel} />
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        aria-label="Cerrar"
+        onClick={onCancel}
+      />
       <div className="relative w-full max-w-sm rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-6 flex flex-col gap-4">
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>
         <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{message}</p>
@@ -42,6 +66,8 @@ export function ConfirmDialog({
       </div>
     </div>
   )
+
+  return createPortal(dialog, document.body)
 }
 
 function ConfirmActions({
