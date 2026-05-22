@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
+import { EditableObservations, type ObservationsValue } from '@/components/EditableObservations'
 import { ProspectWorkspaceSidebar } from '@/components/ProspectWorkspaceSidebar'
 import { Toast } from '@/components/Toast'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
@@ -13,6 +14,7 @@ import {
   fetchClientProspectById,
   clientProspectRowToNegocioFila,
   updateClientProspectEstado,
+  updateClientProspectObservations,
   formatClientProspectError,
 } from '@/lib/supabase/clientProspects'
 import { insertEstadoChangedEvent } from '@/lib/supabase/prospectDetail'
@@ -141,19 +143,27 @@ function ProspectDetailInner() {
                     </div>
                   ))}
                 </div>
-                <div className="px-6 pb-6 grid gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-neutral-500">Problemas detectados</p>
-                    <p className="mt-1 text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap text-sm">
-                      {neg.problemasDetectados || '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-neutral-500">Oportunidades</p>
-                    <p className="mt-1 text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap text-sm">
-                      {neg.oportunidades || '—'}
-                    </p>
-                  </div>
+                <div className="px-6 pb-6 grid gap-6">
+                  <EditableObservations
+                    value={{
+                      problemasDetectados: neg.problemasDetectados,
+                      oportunidades: neg.oportunidades,
+                    }}
+                    disabled={!loggedIn}
+                    disabledHint="Inicia sesión para guardar observaciones"
+                    onSave={async (next: ObservationsValue) => {
+                      if (!row) return { error: new Error('Prospecto no cargado.') }
+                      const sb = createBrowserSupabaseClient()
+                      const { error: uErr } = await updateClientProspectObservations(sb, row.id, next)
+                      if (uErr) return { error: new Error(formatClientProspectError(uErr.message)) }
+                      setRow({
+                        ...row,
+                        problemas_detectados: next.problemasDetectados,
+                        oportunidades: next.oportunidades,
+                      })
+                      return { error: null }
+                    }}
+                  />
                   <div>
                     <label className="text-xs font-semibold uppercase text-neutral-500">Estado del proceso</label>
                     <select

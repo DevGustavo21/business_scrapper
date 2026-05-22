@@ -11,18 +11,16 @@ function auditBudgetForRun(requested: number): number {
   return Math.max(1, Math.min(4, Math.ceil(requested / 4)))
 }
 
+/**
+ * Observaciones se completan por el equipo en el detalle del negocio.
+ * El scraper no genera ningún texto automático en estos campos.
+ */
 function placeholderAuditPendiente(): {
   correo: string
   problemasDetectados: string
   oportunidades: string
 } {
-  return {
-    correo: '',
-    problemasDetectados:
-      'Auditoría web omitida en esta extracción masiva; abre el sitio del negocio para revisar UX, rendimiento y SEO manualmente.',
-    oportunidades:
-      'Priorizar propuesta de valor arriba del fold, datos de contacto claros (NAP), velocidad móvil y SEO local (Google Business Profile + schema).',
-  }
+  return { correo: '', problemasDetectados: '', oportunidades: '' }
 }
 
 const delay = (min: number, max: number) =>
@@ -292,10 +290,9 @@ async function dismissMapsOverlays(page: Page, log: (m: string) => void): Promis
 
 type FeedPlaceHint = { href: string; hint: string }
 
-const MAPS_LITE_PROBLEMAS =
-  'Listado rápido de Maps (la ficha no se abrió en el servidor): teléfono, web o correo pueden faltar o no estar verificados. Sin auditoría automática del sitio del negocio.'
-const MAPS_LITE_OPORTUNIDADES =
-  'Confirma el contacto en Google Maps o en la web oficial; mejora NAP y presencia local (Google Business Profile, schema).'
+/** Observaciones (problemas/oportunidades) las redacta el equipo en el detalle. */
+const MAPS_LITE_PROBLEMAS = ''
+const MAPS_LITE_OPORTUNIDADES = ''
 
 type PlacesDetailFields = {
   name?: string
@@ -372,14 +369,8 @@ async function tryEmitLiteFromMapsFeed(
       contact,
     )
 
-    let problemasDetectados = MAPS_LITE_PROBLEMAS
-    let oportunidades = MAPS_LITE_OPORTUNIDADES
-    const tieneWebNegocio = !!(contact.sitioWeb && !isGoogleOwnedUrl(contact.sitioWeb))
-    if (contact.telefono || tieneWebNegocio || contact.correo) {
-      problemasDetectados =
-        'Datos desde listado de Maps y/o Google Places; conviene validar en la ficha. Sin auditoría automática del sitio web.'
-      oportunidades = MAPS_LITE_OPORTUNIDADES
-    }
+    const problemasDetectados = MAPS_LITE_PROBLEMAS
+    const oportunidades = MAPS_LITE_OPORTUNIDADES
 
     const ok = emit.tryEmit(placeKey, {
       nombre,
@@ -1222,6 +1213,203 @@ async function scrapePaginasAmarillas(
   }
 }
 
+/** Hint de regionCode (ISO-3166-1 alpha-2) según la ubicación tecleada. */
+function regionCodeForUbicacion(ubicacion: string): string | undefined {
+  const u = ubicacion.toLowerCase()
+  if (/nicaragua|managua|granada|le[oó]n|matagalpa|chinandega|estel[ií]/i.test(u)) return 'NI'
+  if (/costa\s*rica|san\s*jos[eé]|escaz[uú]|cartago|heredia|alajuela|lim[oó]n|guanacaste|puntarenas/i.test(u)) return 'CR'
+  if (/guatemala|guate|quetzaltenango|antigua\s+guatemala/i.test(u)) return 'GT'
+  if (/honduras|tegucigalpa|san\s+pedro\s+sula/i.test(u)) return 'HN'
+  if (/el\s+salvador|san\s+salvador/i.test(u)) return 'SV'
+  if (/panam[aá]|ciudad\s+de\s+panam/i.test(u)) return 'PA'
+  if (/m[eé]xico|mexico|cdmx|guadalajara|monterrey|canc[uú]n|tijuana|puebla/i.test(u)) return 'MX'
+  if (/colombia|bogot[aá]|medell[ií]n|cali|cartagena/i.test(u)) return 'CO'
+  if (/espa[ñn]a|madrid|barcelona|valencia|sevilla|bilbao|m[aá]laga|zaragoza/i.test(u)) return 'ES'
+  if (
+    /\b(miami|orlando|tampa|florida|\bfl\b|usa|united states|new york|brooklyn|manhattan|los angeles|san diego|houston|dallas|chicago|phoenix|philadelphia|boston|atlanta|seattle|denver|austin)\b/i.test(
+      u,
+    )
+  ) {
+    return 'US'
+  }
+  return undefined
+}
+
+function languageCodeForUbicacion(ubicacion: string): string {
+  const loc = browserLocaleForUbicacion(ubicacion)
+  if (loc.startsWith('en')) return 'en'
+  if (loc === 'es-419') return 'es-419'
+  return 'es'
+}
+
+type PlacesV1Result = {
+  id?: string
+  displayName?: { text?: string; languageCode?: string }
+  formattedAddress?: string
+  shortFormattedAddress?: string
+  internationalPhoneNumber?: string
+  nationalPhoneNumber?: string
+  websiteUri?: string
+  googleMapsUri?: string
+}
+
+type PlacesV1Response = {
+  places?: PlacesV1Result[]
+  nextPageToken?: string
+  error?: { code?: number; message?: string; status?: string }
+}
+
+let placesV1ServerUsableCache: boolean | null = null
+
+/** Verifica que la clave funciona contra Places API (New) — endpoint v1 con FieldMask. */
+async function placesV1WorksOnServer(key: string, log: (m: string) => void): Promise<boolean> {
+  if (placesV1ServerUsableCache !== null) return placesV1ServerUsableCache
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': key,
+        'X-Goog-FieldMask': 'places.id',
+      },
+      body: JSON.stringify({ textQuery: 'restaurant', pageSize: 1 }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.ok) {
+      placesV1ServerUsableCache = true
+      return true
+    }
+    const data = (await res.json().catch(() => null)) as PlacesV1Response | null
+    const msg = data?.error?.message ?? `HTTP ${res.status}`
+    placesV1ServerUsableCache = false
+    if (/Places API \(New\) has not been used|SERVICE_DISABLED/i.test(msg)) {
+      log(
+        '[scraper] Places API (New) deshabilitada en este proyecto. Actívala en Google Cloud → APIs → «Places API (New)» y reintenta. (Sin activar, caemos a la API legacy.)',
+      )
+    } else if (/API key not valid|API keys with referer/i.test(msg)) {
+      log(
+        '[scraper] Clave de Places API (New) inválida o restringida por Referer. Crea una clave de servidor con restricción de IP o sin restricción y vuelve a probar.',
+      )
+    } else {
+      log(`[scraper] Places API (New) no disponible: ${msg}`)
+    }
+    return false
+  } catch (e) {
+    placesV1ServerUsableCache = false
+    log(`[scraper] Places API (New): red ${e instanceof Error ? e.message : String(e)}`)
+    return false
+  }
+}
+
+/**
+ * Fase primaria: Places API (New) v1. Una sola llamada devuelve nombre, dirección
+ * completa, teléfono internacional y URL del sitio web — sin Place Details extra.
+ * Pagina con `nextPageToken` hasta cubrir el cupo o agotar resultados (~60).
+ */
+async function scrapeGooglePlacesNewApi(
+  categoria: string,
+  ubicacion: string,
+  emit: ScrapeEmit,
+  log: (m: string) => void,
+): Promise<void> {
+  const key = placesServerApiKey()
+  if (!key) return
+  const textQuery = `${categoria} en ${ubicacion}`.replace(/\s+/g, ' ').trim()
+  if (!textQuery) return
+  const before = emit.count()
+
+  const regionCode = regionCodeForUbicacion(ubicacion)
+  const languageCode = languageCodeForUbicacion(ubicacion)
+  let pageToken: string | undefined
+
+  for (let pageIdx = 0; pageIdx < 4 && !emit.full() && !emit.timeUp(); pageIdx++) {
+    const body: Record<string, unknown> = {
+      textQuery,
+      pageSize: 20,
+      languageCode,
+    }
+    if (regionCode) body.regionCode = regionCode
+    if (pageToken) body.pageToken = pageToken
+
+    let res: Response
+    try {
+      res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': key,
+          'X-Goog-FieldMask': [
+            'places.id',
+            'places.displayName',
+            'places.formattedAddress',
+            'places.shortFormattedAddress',
+            'places.internationalPhoneNumber',
+            'places.nationalPhoneNumber',
+            'places.websiteUri',
+            'places.googleMapsUri',
+            'nextPageToken',
+          ].join(','),
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(28_000),
+      })
+    } catch (e) {
+      log(`[scraper] Places v1: red ${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as PlacesV1Response | null
+      const msg = data?.error?.message ?? `HTTP ${res.status}`
+      log(`[scraper] Places v1 ${res.status}: ${msg}`)
+      return
+    }
+
+    const data = (await res.json()) as PlacesV1Response
+    const rows = data.places ?? []
+    for (const r of rows) {
+      if (emit.timeUp() || emit.full()) return
+      const pid = (r.id ?? '').trim()
+      const name = (r.displayName?.text ?? '').trim()
+      if (!pid || !name) continue
+      const dedupe = `gplaces|${pid}`
+      const addrStr = (r.formattedAddress ?? r.shortFormattedAddress ?? '').trim()
+      const { direccion, ciudad, pais } = splitDireccionResultado(addrStr, ubicacion)
+      const telefono = (r.internationalPhoneNumber ?? r.nationalPhoneNumber ?? '').trim()
+      const webRaw = (r.websiteUri ?? '').trim()
+      const mapsLink =
+        (r.googleMapsUri ?? '').trim() ||
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(pid)}`
+      const sitioWeb = webRaw && !isGoogleOwnedUrl(webRaw) ? webRaw : mapsLink
+      let correo = ''
+      if (webRaw && scrapeWantsFetchEmailFromWeb() && !isGoogleOwnedUrl(webRaw)) {
+        correo = await scrapeFetchEmailFromUrl(webRaw)
+      }
+      emit.tryEmit(dedupe, {
+        nombre: name,
+        direccion,
+        ciudad,
+        pais,
+        telefono,
+        correo,
+        sitioWeb,
+        problemasDetectados: '',
+        oportunidades: '',
+        estado: 'Sin contactar',
+      })
+    }
+
+    pageToken = data.nextPageToken?.trim()
+    if (!pageToken || rows.length === 0) break
+    /** Google requiere ~2 s entre páginas para que el token quede activo. */
+    await delay(1900, 2400)
+  }
+
+  const gained = emit.count() - before
+  if (gained > 0) log(`[scraper] Places v1: +${gained} negocios (total ${emit.count()})`)
+  else log('[scraper] Places v1: 0 negocios devueltos para esta consulta.')
+}
+
 /** Fallback cuando el scraping de Maps no devuelve filas (p. ej. anti-bot en Vercel). Requiere clave solo en servidor. */
 async function scrapeGooglePlacesTextSearchApi(
   categoria: string,
@@ -1295,7 +1483,6 @@ async function scrapeGooglePlacesTextSearchApi(
       const webForMail = (det?.website ?? '').trim()
       if (webForMail && scrapeWantsFetchEmailFromWeb() && !/^https?:\/\/(www\.)?google\./i.test(webForMail))
         correo = await scrapeFetchEmailFromUrl(webForMail)
-      const ph = placeholderAuditPendiente()
       emit.tryEmit(dedupe, {
         nombre: name,
         direccion,
@@ -1304,8 +1491,8 @@ async function scrapeGooglePlacesTextSearchApi(
         telefono,
         correo,
         sitioWeb,
-        problemasDetectados: `Origen: Google Places (API). ${ph.problemasDetectados}`.trim(),
-        oportunidades: ph.oportunidades,
+        problemasDetectados: '',
+        oportunidades: '',
         estado: 'Sin contactar',
       })
     }
@@ -1403,9 +1590,13 @@ export async function streamScrapeNegocios(
     )
   }
   const placesKey = placesServerApiKey()
-  let placesApiOk = false
+  let placesV1Ok = false
+  let placesLegacyOk = false
   if (placesKey) {
-    placesApiOk = await placesApiWorksOnServer(placesKey, log)
+    placesV1Ok = await placesV1WorksOnServer(placesKey, log)
+    if (!placesV1Ok) {
+      placesLegacyOk = await placesApiWorksOnServer(placesKey, log)
+    }
   } else {
     log(
       '[scraper] Sin GOOGLE_PLACES_API_KEY: teléfono, web y correo dependen del DOM de Maps. Añade la clave en .env.local.',
@@ -1415,12 +1606,18 @@ export async function streamScrapeNegocios(
   try {
     const auditBudget = { n: auditBudgetForRun(requested) }
 
-    if (placesApiOk && !emit.full()) {
-      log('[scraper] Fase 1: Google Places API (datos completos)')
-      await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
-        console.error('[scraper] Places API (fase 1) failed:', err instanceof Error ? err.message : err)
+    if (placesV1Ok && !emit.full()) {
+      log('[scraper] Fase 1: Places API (New) v1 — datos completos en una llamada')
+      await scrapeGooglePlacesNewApi(categoria, ubicacion, emit, log).catch(err => {
+        console.error('[scraper] Places v1 (fase 1) failed:', err instanceof Error ? err.message : err)
       })
-      log(`[scraper] tras Places API → ${emit.count()}/${requested}`)
+      log(`[scraper] tras Places v1 → ${emit.count()}/${requested}`)
+    } else if (placesLegacyOk && !emit.full()) {
+      log('[scraper] Fase 1: Places API (legacy)')
+      await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
+        console.error('[scraper] Places legacy (fase 1) failed:', err instanceof Error ? err.message : err)
+      })
+      log(`[scraper] tras Places legacy → ${emit.count()}/${requested}`)
     }
 
     let round = 0
@@ -1465,12 +1662,18 @@ export async function streamScrapeNegocios(
       }
     }
 
-    if (placesApiOk && emit.count() < requested) {
+    if ((placesV1Ok || placesLegacyOk) && emit.count() < requested) {
       emit.extendDeadline(50_000)
-      log('[scraper] Fase final: Google Places API (completar cupo)')
-      await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
-        console.error('[scraper] Places API (fase final) failed:', err instanceof Error ? err.message : err)
-      })
+      log('[scraper] Fase final: Places API (completar cupo)')
+      if (placesV1Ok) {
+        await scrapeGooglePlacesNewApi(categoria, ubicacion, emit, log).catch(err => {
+          console.error('[scraper] Places v1 (fase final) failed:', err instanceof Error ? err.message : err)
+        })
+      } else {
+        await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
+          console.error('[scraper] Places legacy (fase final) failed:', err instanceof Error ? err.message : err)
+        })
+      }
     }
 
     const total = emit.count()

@@ -97,6 +97,41 @@ export async function updateProspectSearchProgress(
 }
 
 /**
+ * Mutación quirúrgica de una sola fila del JSON `negocios`: solo cambian las observaciones
+ * (problemasDetectados + oportunidades). Lee el array, edita la fila por `rowId` y reescribe.
+ */
+export async function updateProspectSearchRowObservations(
+  supabase: SupabaseClient,
+  searchId: string,
+  rowId: string,
+  fields: { problemasDetectados: string; oportunidades: string },
+): Promise<{ error: Error | null }> {
+  const { data, error: fErr } = await supabase
+    .from(TABLE)
+    .select('negocios')
+    .eq('id', searchId)
+    .maybeSingle()
+  if (fErr) return { error: new Error(fErr.message) }
+  if (!data) return { error: new Error('La búsqueda no existe o no tienes acceso.') }
+  const negocios = (Array.isArray(data.negocios) ? data.negocios : []) as NegocioFila[]
+  let found = false
+  const next = negocios.map(n => {
+    if (n.id !== rowId) return n
+    found = true
+    return { ...n, problemasDetectados: fields.problemasDetectados, oportunidades: fields.oportunidades }
+  })
+  if (!found) return { error: new Error('No se encontró esta fila en la búsqueda.') }
+  const { error: uErr } = await supabase
+    .from(TABLE)
+    .update({
+      negocios: next.map(negocioFilaForSearchJson),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', searchId)
+  return { error: uErr ? new Error(uErr.message) : null }
+}
+
+/**
  * En búsquedas propias o compartidas visibles, pasa a «Sin contactar» filas en «No interesado»
  * con la misma huella (p. ej. tras quitar de lista negra sin vínculo a client_prospects).
  */

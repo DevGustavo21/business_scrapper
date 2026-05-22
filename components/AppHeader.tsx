@@ -74,13 +74,13 @@ function HeaderInner({
   isActive: (href: string) => boolean
 }) {
   return (
-    <div className="max-w-[1600px] mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
+    <div className="max-w-[1600px] mx-auto px-3 min-[1200px]:px-6 h-14 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
           aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú de navegación'}
           aria-expanded={mobileNavOpen}
-          className="sm:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          className="min-[1200px]:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
           onClick={() => setMobileNavOpen(v => !v)}
         >
           {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
@@ -88,7 +88,7 @@ function HeaderInner({
         <BrandLogo />
       </div>
 
-      <nav className="hidden sm:flex items-center gap-0.5" aria-label="Principal">
+      <nav className="hidden min-[1200px]:flex items-center gap-0.5" aria-label="Principal">
         {links.map(({ href, label }) => (
           <Link
             key={href}
@@ -105,20 +105,20 @@ function HeaderInner({
         ))}
       </nav>
 
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      <div className="flex items-center gap-2 min-[1200px]:gap-3 shrink-0">
         {showMobileHistoryTrigger && (
           <button
             type="button"
             aria-label="Abrir historial de búsquedas"
             title="Historial de búsquedas"
-            className="sm:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-indigo-600 dark:hover:text-indigo-400"
+            className="min-[1200px]:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-indigo-600 dark:hover:text-indigo-400"
             onClick={onOpenMobileHistory}
           >
             <Clock size={20} />
           </button>
         )}
         <NotificationsPopover />
-        <div className="hidden sm:block">
+        <div className="hidden min-[1200px]:block">
           <ThemeToggle />
         </div>
         <AuthNav />
@@ -135,7 +135,7 @@ function MobileNavDrawer({
   isActive: (href: string) => boolean
 }) {
   return (
-    <div className="fixed inset-0 z-50 sm:hidden" role="dialog" aria-modal="true" aria-label="Menú de navegación">
+    <div className="fixed inset-0 z-50 min-[1200px]:hidden" role="dialog" aria-modal="true" aria-label="Menú de navegación">
       <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" aria-label="Cerrar menú" onClick={onClose} />
       <nav className="absolute top-0 left-0 bottom-0 w-[min(88vw,300px)] bg-white dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col">
         <div className="flex items-center justify-between px-4 h-14 border-b border-neutral-200 dark:border-neutral-800 shrink-0">

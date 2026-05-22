@@ -277,6 +277,26 @@ export async function updateClientProspectEstado(
   return { error: error ? new Error(error.message) : null }
 }
 
+/**
+ * Actualiza solo las observaciones del equipo (problemas detectados + oportunidades).
+ * No toca el resto de campos para evitar pisar lo que cambie en paralelo.
+ */
+export async function updateClientProspectObservations(
+  supabase: SupabaseClient,
+  prospectId: string,
+  fields: { problemasDetectados: string; oportunidades: string },
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from(TABLE)
+    .update({
+      problemas_detectados: fields.problemasDetectados,
+      oportunidades: fields.oportunidades,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', prospectId)
+  return { error: error ? new Error(error.message) : null }
+}
+
 /** Solo filas en «No interesado» que coincidan en huella (p. ej. al quitar de lista negra). */
 export async function resetNoInteresadoToSinContactarForUserProspectsMatchingFingerprint(
   supabase: SupabaseClient,

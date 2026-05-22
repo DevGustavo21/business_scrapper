@@ -4,17 +4,23 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
+import { EditableObservations, type ObservationsValue } from '@/components/EditableObservations'
 import { ProspectWorkspaceSidebar } from '@/components/ProspectWorkspaceSidebar'
 import { Toast } from '@/components/Toast'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
-import { fetchProspectSearch, updateProspectSearchProgress } from '@/lib/supabase/prospectSearches'
+import {
+  fetchProspectSearch,
+  updateProspectSearchProgress,
+  updateProspectSearchRowObservations,
+} from '@/lib/supabase/prospectSearches'
 import {
   fetchClientProspectById,
   fetchProspectMarksForSearch,
   mergeProspectMarksIntoNegocios,
   updateClientProspectEstado,
+  updateClientProspectObservations,
   formatClientProspectError,
 } from '@/lib/supabase/clientProspects'
 import { insertEstadoChangedEvent, type WorkspaceThreadTarget } from '@/lib/supabase/prospectDetail'
@@ -231,19 +237,37 @@ function SearchNegocioDetailInner() {
                     </div>
                   ))}
                 </div>
-                <div className="px-6 pb-6 grid gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-neutral-500">Problemas detectados</p>
-                    <p className="mt-1 text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap text-sm">
-                      {row.problemasDetectados || '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-neutral-500">Oportunidades</p>
-                    <p className="mt-1 text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap text-sm">
-                      {row.oportunidades || '—'}
-                    </p>
-                  </div>
+                <div className="px-6 pb-6 grid gap-6">
+                  <EditableObservations
+                    value={{
+                      problemasDetectados: row.problemasDetectados,
+                      oportunidades: row.oportunidades,
+                    }}
+                    disabled={!loggedIn}
+                    disabledHint="Inicia sesión para guardar observaciones"
+                    onSave={async (next: ObservationsValue) => {
+                      if (!row || !user) return { error: new Error('Fila no cargada.') }
+                      const sb = createBrowserSupabaseClient()
+                      const { error: sErr } = await updateProspectSearchRowObservations(sb, searchId, row.id, next)
+                      if (sErr) return { error: sErr }
+                      if (row.prospectRecordId) {
+                        const { error: pErr } = await updateClientProspectObservations(
+                          sb,
+                          row.prospectRecordId,
+                          next,
+                        )
+                        if (pErr) return { error: new Error(formatClientProspectError(pErr.message)) }
+                      }
+                      const updated = {
+                        ...row,
+                        problemasDetectados: next.problemasDetectados,
+                        oportunidades: next.oportunidades,
+                      }
+                      setRow(updated)
+                      setAllNegocios(prev => prev.map(r => (r.id === row.id ? updated : r)))
+                      return { error: null }
+                    }}
+                  />
                   <div>
                     <label className="text-xs font-semibold uppercase text-neutral-500">Estado del proceso</label>
                     <select
