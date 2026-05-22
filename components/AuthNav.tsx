@@ -69,7 +69,7 @@ export function AuthNav() {
     await supabase.auth.signOut()
     setLogoutBusy(false)
     setLogoutOpen(false)
-    window.location.href = '/login'
+    window.location.href = '/'
   }
 
   return (
