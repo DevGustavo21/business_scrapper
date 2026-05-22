@@ -25,6 +25,7 @@ import {
   Workflow,
   Zap,
 } from 'lucide-react'
+import { DotWave } from '@/components/DotWave'
 import { LandingHeader } from '@/components/LandingHeader'
 
 export function Landing() {
@@ -51,41 +52,30 @@ export function Landing() {
 function BackgroundGlow() {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[720px] overflow-hidden">
-      <div className="absolute left-1/2 top-[-200px] h-[700px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.18),transparent_70%)] dark:bg-[radial-gradient(closest-side,rgba(99,102,241,0.28),transparent_70%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,var(--color-background)_85%)]" />
-      <DotGrid />
+      <div className="absolute left-1/2 top-[-220px] h-[760px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.14),transparent_70%)] dark:bg-[radial-gradient(closest-side,rgba(99,102,241,0.2),transparent_70%)]" />
     </div>
-  )
-}
-
-function DotGrid() {
-  return (
-    <svg
-      aria-hidden
-      className="absolute inset-0 h-full w-full opacity-[0.18] dark:opacity-[0.25]"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <pattern id="dotgrid" width="24" height="24" patternUnits="userSpaceOnUse">
-          <circle cx="1" cy="1" r="1" className="fill-neutral-400 dark:fill-neutral-700" />
-        </pattern>
-        <radialGradient id="dotmask" cx="50%" cy="0%" r="60%">
-          <stop offset="0%" stopColor="white" stopOpacity="1" />
-          <stop offset="100%" stopColor="white" stopOpacity="0" />
-        </radialGradient>
-        <mask id="dotgridmask">
-          <rect width="100%" height="100%" fill="url(#dotmask)" />
-        </mask>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#dotgrid)" mask="url(#dotgridmask)" />
-    </svg>
   )
 }
 
 function Hero() {
   return (
-    <section className="relative px-4 pt-20 pb-24 sm:px-6 sm:pt-28 sm:pb-32">
-      <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
+    <section className="relative isolate overflow-hidden px-4 pt-20 pb-24 sm:px-6 sm:pt-28 sm:pb-32">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <DotWave
+          className="absolute inset-0 h-full w-full"
+          amplitude={42}
+          spacing={22}
+          dotRadius={1.8}
+          tilt={1.15}
+          speed={0.00025}
+          opacity={0.45}
+        />
+        <div className="absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(to_bottom,transparent,var(--color-background)_90%)]" />
+        <div className="absolute inset-y-0 left-0 w-24 bg-[linear-gradient(to_right,var(--color-background),transparent)]" />
+        <div className="absolute inset-y-0 right-0 w-24 bg-[linear-gradient(to_left,var(--color-background),transparent)]" />
+      </div>
+
+      <div className="relative mx-auto flex max-w-5xl flex-col items-center text-center">
         <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-neutral-200/80 bg-white/60 px-3.5 py-1.5 text-xs font-medium text-neutral-600 backdrop-blur dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-300">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
