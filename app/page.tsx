@@ -94,7 +94,23 @@ function HomeInner() {
   const [requestedQty, setRequestedQty] = useState(12)
   const [searchCompleteOpen, setSearchCompleteOpen] = useState(false)
   const [searchCompleteSummary, setSearchCompleteSummary] = useState<SearchCompleteSummary | null>(null)
-  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+
+  /** Bloqueo de scroll del body + Escape para cerrar el drawer del historial. */
+  useEffect(() => {
+    if (!historyOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setHistoryOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [historyOpen])
+
   const [shareSearchOpen, setShareSearchOpen] = useState(false)
   const [addFolderOpen, setAddFolderOpen] = useState(false)
   const [prospectLists, setProspectLists] = useState<ProspectListRow[]>([])
@@ -201,7 +217,7 @@ function HomeInner() {
     setError(null)
     setSearchCompleteOpen(false)
     setSearchCompleteSummary(null)
-    setMobileHistoryOpen(false)
+    setHistoryOpen(false)
     setLoading(false)
     freshSearchExcludeRef.current = true
     setSearchFormKey(k => k + 1)
@@ -612,41 +628,42 @@ function HomeInner() {
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader
-        showMobileHistoryTrigger
-        onOpenMobileHistory={() => setMobileHistoryOpen(true)}
+        showHistoryTrigger
+        historyOpen={historyOpen}
+        onToggleHistory={() => setHistoryOpen(v => !v)}
       />
 
-      {mobileHistoryOpen && (
+      {historyOpen && (
         <button
           type="button"
           aria-label="Cerrar historial"
-          className="fixed inset-0 z-40 bg-black/50 sm:hidden"
-          onClick={() => setMobileHistoryOpen(false)}
+          className="fixed inset-0 z-40 bg-black/50"
+          onClick={() => setHistoryOpen(false)}
         />
       )}
 
-      <div className="flex flex-1 flex-col sm:flex-row min-h-0 max-w-[1600px] mx-auto w-full relative">
-        <SearchHistorySidebar
-          items={historyItems}
-          activeId={activeSearchId}
-          loading={loading}
-          disabled={loading}
-          loggedIn={loggedIn}
-          onNew={handleNewChat}
-          onDelete={handleDeleteSearch}
-          onSelect={id => {
-            if (loading) return
-            void loadSearchById(id)
-            setMobileHistoryOpen(false)
-          }}
-          className={cn(
-            'max-sm:fixed max-sm:top-14 max-sm:bottom-0 max-sm:left-0 max-sm:z-50 max-sm:w-[min(92vw,300px)] max-sm:border-r max-sm:border-neutral-200 dark:max-sm:border-neutral-800 max-sm:shadow-2xl max-sm:transition-transform max-sm:duration-300 max-sm:bg-neutral-50 max-sm:dark:bg-neutral-950',
-            mobileHistoryOpen ? 'max-sm:translate-x-0' : 'max-sm:-translate-x-full',
-            'sm:translate-x-0',
-          )}
-          sidebarFooter={loggedIn ? <SearchHistoryConfigFooter /> : undefined}
-        />
+      <SearchHistorySidebar
+        items={historyItems}
+        activeId={activeSearchId}
+        loading={loading}
+        disabled={loading}
+        loggedIn={loggedIn}
+        onNew={handleNewChat}
+        onDelete={handleDeleteSearch}
+        onClose={() => setHistoryOpen(false)}
+        onSelect={id => {
+          if (loading) return
+          void loadSearchById(id)
+          setHistoryOpen(false)
+        }}
+        className={cn(
+          'fixed top-14 bottom-0 left-0 z-50 w-[min(92vw,320px)] border-r transition-transform duration-300 ease-out',
+          historyOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+        sidebarFooter={loggedIn ? <SearchHistoryConfigFooter /> : undefined}
+      />
 
+      <div className="flex flex-1 flex-col min-h-0 max-w-[1600px] mx-auto w-full">
         <main className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
           <div className="text-center flex flex-col items-center gap-3 max-w-2xl mx-auto">
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">

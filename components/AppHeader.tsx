@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Clock, Menu, X } from 'lucide-react'
+import { History, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AuthNav } from '@/components/AuthNav'
 import { BrandLogo } from '@/components/BrandLogo'
@@ -18,11 +18,14 @@ const links = [
 ]
 
 export function AppHeader({
-  showMobileHistoryTrigger,
-  onOpenMobileHistory,
+  showHistoryTrigger,
+  onToggleHistory,
+  historyOpen,
 }: {
-  showMobileHistoryTrigger?: boolean
-  onOpenMobileHistory?: () => void
+  /** Si true muestra el botón "Historial" al lado del logo (solo en páginas con historial). */
+  showHistoryTrigger?: boolean
+  onToggleHistory?: () => void
+  historyOpen?: boolean
 }) {
   const pathname = usePathname()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -47,8 +50,9 @@ export function AppHeader({
     <>
       <header className="sticky top-0 z-40 border-b border-neutral-200 dark:border-neutral-800 bg-[--color-background]/95 backdrop-blur-md">
         <HeaderInner
-          showMobileHistoryTrigger={showMobileHistoryTrigger}
-          onOpenMobileHistory={onOpenMobileHistory}
+          showHistoryTrigger={showHistoryTrigger}
+          onToggleHistory={onToggleHistory}
+          historyOpen={historyOpen}
           mobileNavOpen={mobileNavOpen}
           setMobileNavOpen={setMobileNavOpen}
           isActive={isActive}
@@ -61,14 +65,16 @@ export function AppHeader({
 }
 
 function HeaderInner({
-  showMobileHistoryTrigger,
-  onOpenMobileHistory,
+  showHistoryTrigger,
+  onToggleHistory,
+  historyOpen,
   mobileNavOpen,
   setMobileNavOpen,
   isActive,
 }: {
-  showMobileHistoryTrigger?: boolean
-  onOpenMobileHistory?: () => void
+  showHistoryTrigger?: boolean
+  onToggleHistory?: () => void
+  historyOpen?: boolean
   mobileNavOpen: boolean
   setMobileNavOpen: React.Dispatch<React.SetStateAction<boolean>>
   isActive: (href: string) => boolean
@@ -85,6 +91,23 @@ function HeaderInner({
         >
           {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
+        {showHistoryTrigger && (
+          <button
+            type="button"
+            aria-label={historyOpen ? 'Cerrar historial' : 'Abrir historial de búsquedas'}
+            aria-expanded={historyOpen}
+            title="Historial de búsquedas"
+            onClick={onToggleHistory}
+            className={cn(
+              'shrink-0 p-2 rounded-lg border transition-colors',
+              historyOpen
+                ? 'border-indigo-500/60 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-500/40'
+                : 'border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-indigo-600 dark:hover:text-indigo-400',
+            )}
+          >
+            <History size={20} />
+          </button>
+        )}
         <BrandLogo />
       </div>
 
@@ -106,17 +129,6 @@ function HeaderInner({
       </nav>
 
       <div className="flex items-center gap-2 min-[1200px]:gap-3 shrink-0">
-        {showMobileHistoryTrigger && (
-          <button
-            type="button"
-            aria-label="Abrir historial de búsquedas"
-            title="Historial de búsquedas"
-            className="min-[1200px]:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-indigo-600 dark:hover:text-indigo-400"
-            onClick={onOpenMobileHistory}
-          >
-            <Clock size={20} />
-          </button>
-        )}
         <NotificationsPopover />
         <div className="hidden min-[1200px]:block">
           <ThemeToggle />
