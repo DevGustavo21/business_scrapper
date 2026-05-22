@@ -46,6 +46,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   console.log(`[api/scrape/stream] POST categoria="${categoria}" ubicacion="${ubicacion}" cantidad=${qty}`)
 
+  const tStart = Date.now()
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       /** Evita que Vercel/CDN acumulen el cuerpo hasta el final: vacía buffers entre negocios. */
       const enc = new TextEncoder()
       let pingTimer: ReturnType<typeof setInterval> | null = null
+      let emittedCount = 0
       try {
         pingTimer = setInterval(() => {
           try {
@@ -67,13 +69,21 @@ export async function POST(req: NextRequest): Promise<Response> {
           ubicacion,
           qty,
           SCRAPE_MAX_MS,
-          n => send('negocio', clipNegocioForSse(n)),
+          n => {
+            emittedCount++
+            console.log(
+              `[stream] +1 ${emittedCount}/${qty} (+${Date.now() - tStart}ms) ${n.nombre} | tel="${n.telefono || '—'}" web="${n.sitioWeb || '—'}"`,
+            )
+            send('negocio', clipNegocioForSse(n))
+          },
           excludeFingerprints.length > 0 ? excludeFingerprints : undefined,
         )
         const done: ScrapeStreamDone = { reason, total, requested }
+        console.log(`[stream] done reason=${reason} total=${total}/${requested} (+${Date.now() - tStart}ms)`)
         send('done', done)
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Error desconocido.'
+        console.error(`[stream] error (+${Date.now() - tStart}ms):`, message)
         send('error', { message })
       } finally {
         if (pingTimer) clearInterval(pingTimer)

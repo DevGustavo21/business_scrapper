@@ -446,6 +446,13 @@ function HomeInner() {
         })
       }
 
+      const tStart = performance.now()
+      console.log(
+        `%c[búsqueda] inicio`,
+        'color:#7c3aed;font-weight:600',
+        { categoria, ubicacion, cantidad, excludeFingerprints: excludeFingerprints.length },
+      )
+
       try {
         const res = await fetch('/api/scrape/stream', {
           method: 'POST',
@@ -484,21 +491,44 @@ function HomeInner() {
               streamRows.push(row)
               rowBatch.push(row)
               scheduleFlushRows()
-            } catch {
-              /* ignore */
+              const elapsedMs = Math.round(performance.now() - tStart)
+              console.log(
+                `%c[búsqueda] +1`,
+                'color:#10b981;font-weight:600',
+                `${streamRows.length}/${cantidad}`,
+                {
+                  nombre: n.nombre,
+                  ciudad: n.ciudad,
+                  telefono: n.telefono || '—',
+                  sitioWeb: n.sitioWeb || '—',
+                  correo: n.correo || '—',
+                  tMs: elapsedMs,
+                },
+              )
+            } catch (err) {
+              console.warn('[búsqueda] negocio inválido en SSE', err)
             }
           } else if (event === 'done') {
             try {
               streamMeta.done = JSON.parse(data) as ScrapeStreamDone
+              const elapsedMs = Math.round(performance.now() - tStart)
+              console.log(
+                `%c[búsqueda] fin`,
+                'color:#7c3aed;font-weight:600',
+                { ...streamMeta.done, tMs: elapsedMs },
+              )
             } catch {
-              /* ignore */
+              console.warn('[búsqueda] payload de "done" inválido')
             }
           } else if (event === 'error') {
             try {
               const j = JSON.parse(data) as { message?: string }
-              setError(j.message ?? 'Error en el servidor.')
+              const msg = j.message ?? 'Error en el servidor.'
+              setError(msg)
+              console.error('[búsqueda] error del servidor:', msg)
             } catch {
               setError('Error en el servidor.')
+              console.error('[búsqueda] error del servidor (sin detalle)')
             }
           }
         }

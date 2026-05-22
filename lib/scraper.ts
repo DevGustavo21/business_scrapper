@@ -134,7 +134,6 @@ async function enrichContactFromPlacesApi(
   },
   partial: ContactFields,
 ): Promise<ContactFields> {
-  if (!placesApiUsableCached()) return partial
   const key = placesServerApiKey()
   if (!key) return partial
 
@@ -673,9 +672,10 @@ async function scrapeFetchEmailFromUrl(url: string): Promise<string> {
   if (!/^https?:\/\//i.test(u)) u = `https://${u}`
   if (/^https?:\/\/(www\.)?google\./i.test(u)) return ''
   try {
+    /** 3.5 s es suficiente para portadas reales; tope corto para que el batch paralelo no se atasque. */
     const res = await fetch(u, {
       redirect: 'follow',
-      signal: AbortSignal.timeout(6500),
+      signal: AbortSignal.timeout(3500),
       headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' },
     })
     if (!res.ok) return ''
@@ -701,41 +701,6 @@ function placesServerApiKey(): string {
   )
 }
 
-let placesApiServerUsableCache: boolean | null = null
-
-/** La clave debe permitir llamadas desde el servidor (IP o sin restricción), no solo Referer web. */
-async function placesApiWorksOnServer(key: string, log: (m: string) => void): Promise<boolean> {
-  if (placesApiServerUsableCache !== null) return placesApiServerUsableCache
-  const u = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
-  u.searchParams.set('query', 'restaurant')
-  u.searchParams.set('key', key)
-  try {
-    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(10_000) })
-    const data = (await res.json()) as { status?: string; error_message?: string }
-    const msg = data.error_message ?? ''
-    if (data.status === 'REQUEST_DENIED' && /referer/i.test(msg)) {
-      placesApiServerUsableCache = false
-      log(
-        '[scraper] GOOGLE_PLACES_API_KEY con restricción «Referer»: no funciona en el servidor. En Google Cloud → Credentials crea otra clave con restricción «IP» (o ninguna en desarrollo) y Places API activada.',
-      )
-      return false
-    }
-    placesApiServerUsableCache =
-      data.status === 'OK' || data.status === 'ZERO_RESULTS' || data.status === 'OVER_QUERY_LIMIT'
-    if (!placesApiServerUsableCache) {
-      log(`[scraper] Places API no disponible: status=${data.status ?? '?'} ${msg}`.trim())
-    }
-    return placesApiServerUsableCache
-  } catch (e) {
-    placesApiServerUsableCache = false
-    log(`[scraper] Places API: error de red (${e instanceof Error ? e.message : String(e)})`)
-    return false
-  }
-}
-
-function placesApiUsableCached(): boolean {
-  return placesApiServerUsableCache === true
-}
 
 const SIN_WEB_PROBLEMAS =
   'No hay sitio web enlazado o la URL está vacía: no se puede auditar rendimiento, accesibilidad ni SEO del dominio propio desde el listado.'
@@ -1259,75 +1224,240 @@ type PlacesV1Response = {
   error?: { code?: number; message?: string; status?: string }
 }
 
-let placesV1ServerUsableCache: boolean | null = null
+/**
+ * Expande ubicaciones amplias (estados de EE.UU., países) a sus ciudades principales.
+ * Sin esto, Places API (New) devuelve ~20 resultados clusterizados alrededor de un
+ * punto único; con esto, cubrimos toda la geografía y rompemos el techo de 60 negocios.
+ */
+function expandSubRegions(loc: string): string[] {
+  const u = loc.toLowerCase().trim()
 
-/** Verifica que la clave funciona contra Places API (New) — endpoint v1 con FieldMask. */
-async function placesV1WorksOnServer(key: string, log: (m: string) => void): Promise<boolean> {
-  if (placesV1ServerUsableCache !== null) return placesV1ServerUsableCache
-  try {
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask': 'places.id',
-      },
-      body: JSON.stringify({ textQuery: 'restaurant', pageSize: 1 }),
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (res.ok) {
-      placesV1ServerUsableCache = true
-      return true
-    }
-    const data = (await res.json().catch(() => null)) as PlacesV1Response | null
-    const msg = data?.error?.message ?? `HTTP ${res.status}`
-    placesV1ServerUsableCache = false
-    if (/Places API \(New\) has not been used|SERVICE_DISABLED/i.test(msg)) {
-      log(
-        '[scraper] Places API (New) deshabilitada en este proyecto. Actívala en Google Cloud → APIs → «Places API (New)» y reintenta. (Sin activar, caemos a la API legacy.)',
-      )
-    } else if (/API key not valid|API keys with referer/i.test(msg)) {
-      log(
-        '[scraper] Clave de Places API (New) inválida o restringida por Referer. Crea una clave de servidor con restricción de IP o sin restricción y vuelve a probar.',
-      )
-    } else {
-      log(`[scraper] Places API (New) no disponible: ${msg}`)
-    }
-    return false
-  } catch (e) {
-    placesV1ServerUsableCache = false
-    log(`[scraper] Places API (New): red ${e instanceof Error ? e.message : String(e)}`)
-    return false
+  // Estados de EE.UU.
+  if (/(^|[ ,])(florida|fl)([ ,]|$)/i.test(u) && !/miami|orlando|tampa|jacksonville|fort lauderdale/i.test(u)) {
+    return [
+      'Miami, Florida',
+      'Orlando, Florida',
+      'Tampa, Florida',
+      'Jacksonville, Florida',
+      'Fort Lauderdale, Florida',
+      'St. Petersburg, Florida',
+      'Hialeah, Florida',
+      'Tallahassee, Florida',
+    ]
   }
+  if (/(^|[ ,])(texas|tx)([ ,]|$)/i.test(u) && !/houston|dallas|austin|san antonio|fort worth/i.test(u)) {
+    return [
+      'Houston, Texas',
+      'Dallas, Texas',
+      'Austin, Texas',
+      'San Antonio, Texas',
+      'Fort Worth, Texas',
+      'El Paso, Texas',
+    ]
+  }
+  if (/(^|[ ,])(california|\bca\b)([ ,]|$)/i.test(u) && !/los angeles|san francisco|san diego|san jose/i.test(u)) {
+    return [
+      'Los Angeles, California',
+      'San Francisco, California',
+      'San Diego, California',
+      'San Jose, California',
+      'Sacramento, California',
+      'Fresno, California',
+      'Oakland, California',
+    ]
+  }
+  if (/(^|[ ,])(new york|\bny\b)([ ,]|$)/i.test(u) && !/manhattan|brooklyn|queens|bronx/i.test(u)) {
+    return ['Manhattan, New York', 'Brooklyn, New York', 'Queens, New York', 'Buffalo, New York', 'Rochester, New York']
+  }
+  if (/(^|[ ,])(illinois|\bil\b)([ ,]|$)/i.test(u) && !/chicago/i.test(u)) {
+    return ['Chicago, Illinois', 'Aurora, Illinois', 'Naperville, Illinois', 'Springfield, Illinois']
+  }
+  if (/(^|[ ,])(arizona|\baz\b)([ ,]|$)/i.test(u) && !/phoenix|tucson/i.test(u)) {
+    return ['Phoenix, Arizona', 'Tucson, Arizona', 'Mesa, Arizona', 'Scottsdale, Arizona']
+  }
+  if (/(^|[ ,])(georgia|\bga\b)([ ,]|$)/i.test(u) && !/atlanta/i.test(u)) {
+    return ['Atlanta, Georgia', 'Savannah, Georgia', 'Augusta, Georgia', 'Columbus, Georgia']
+  }
+  if (/(^|[ ,])(washington|\bwa\b)([ ,]|$)/i.test(u) && !/seattle|tacoma/i.test(u)) {
+    return ['Seattle, Washington', 'Tacoma, Washington', 'Spokane, Washington', 'Bellevue, Washington']
+  }
+  if (/(^|[ ,])(massachusetts|\bma\b)([ ,]|$)/i.test(u) && !/boston/i.test(u)) {
+    return ['Boston, Massachusetts', 'Cambridge, Massachusetts', 'Worcester, Massachusetts', 'Springfield, Massachusetts']
+  }
+  if (/(^|[ ,])(colorado|\bco\b)([ ,]|$)/i.test(u) && !/denver/i.test(u)) {
+    return ['Denver, Colorado', 'Colorado Springs, Colorado', 'Aurora, Colorado', 'Boulder, Colorado']
+  }
+
+  // USA "completo"
+  if (/^(usa|united states|estados unidos|us)$/i.test(u)) {
+    return [
+      'New York, NY',
+      'Los Angeles, CA',
+      'Chicago, IL',
+      'Houston, TX',
+      'Phoenix, AZ',
+      'Philadelphia, PA',
+      'San Antonio, TX',
+      'San Diego, CA',
+      'Dallas, TX',
+      'Miami, FL',
+    ]
+  }
+
+  // Países hispanohablantes — España
+  if (/^(espa[ñn]a|spain)$/i.test(u) || /,\s*espa[ñn]a$/i.test(u)) {
+    return [
+      'Madrid, España',
+      'Barcelona, España',
+      'Valencia, España',
+      'Sevilla, España',
+      'Zaragoza, España',
+      'Málaga, España',
+      'Bilbao, España',
+      'Murcia, España',
+    ]
+  }
+  // México
+  if (/^(m[eé]xico|mexico)$/i.test(u) || /,\s*m[eé]xico$/i.test(u)) {
+    return [
+      'Ciudad de México',
+      'Guadalajara, México',
+      'Monterrey, México',
+      'Puebla, México',
+      'Tijuana, México',
+      'Cancún, México',
+      'León, México',
+      'Mérida, México',
+    ]
+  }
+  // Centroamérica
+  if (/^nicaragua$/i.test(u) || /,\s*nicaragua$/i.test(u)) {
+    return ['Managua, Nicaragua', 'Granada, Nicaragua', 'León, Nicaragua', 'Matagalpa, Nicaragua', 'Estelí, Nicaragua']
+  }
+  if (/^costa\s*rica$/i.test(u) || /,\s*costa\s*rica$/i.test(u)) {
+    return ['San José, Costa Rica', 'Heredia, Costa Rica', 'Alajuela, Costa Rica', 'Cartago, Costa Rica']
+  }
+  if (/^guatemala$/i.test(u) || /,\s*guatemala$/i.test(u)) {
+    return ['Ciudad de Guatemala', 'Quetzaltenango, Guatemala', 'Antigua Guatemala', 'Escuintla, Guatemala']
+  }
+  if (/^honduras$/i.test(u) || /,\s*honduras$/i.test(u)) {
+    return ['Tegucigalpa, Honduras', 'San Pedro Sula, Honduras', 'La Ceiba, Honduras']
+  }
+  if (/^el\s+salvador$/i.test(u) || /,\s*el\s+salvador$/i.test(u)) {
+    return ['San Salvador, El Salvador', 'Santa Ana, El Salvador', 'San Miguel, El Salvador']
+  }
+  if (/^panam[aá]$/i.test(u) || /,\s*panam[aá]$/i.test(u)) {
+    return ['Ciudad de Panamá', 'David, Panamá', 'Colón, Panamá']
+  }
+  // Sudamérica
+  if (/^colombia$/i.test(u) || /,\s*colombia$/i.test(u)) {
+    return ['Bogotá, Colombia', 'Medellín, Colombia', 'Cali, Colombia', 'Cartagena, Colombia', 'Barranquilla, Colombia']
+  }
+  if (/^argentina$/i.test(u) || /,\s*argentina$/i.test(u)) {
+    return ['Buenos Aires, Argentina', 'Córdoba, Argentina', 'Rosario, Argentina', 'Mendoza, Argentina']
+  }
+  if (/^chile$/i.test(u) || /,\s*chile$/i.test(u)) {
+    return ['Santiago, Chile', 'Valparaíso, Chile', 'Concepción, Chile', 'Viña del Mar, Chile']
+  }
+  if (/^per[uú]$/i.test(u) || /,\s*per[uú]$/i.test(u)) {
+    return ['Lima, Perú', 'Arequipa, Perú', 'Trujillo, Perú', 'Chiclayo, Perú']
+  }
+  if (/^ecuador$/i.test(u) || /,\s*ecuador$/i.test(u)) {
+    return ['Quito, Ecuador', 'Guayaquil, Ecuador', 'Cuenca, Ecuador']
+  }
+  if (/^venezuela$/i.test(u) || /,\s*venezuela$/i.test(u)) {
+    return ['Caracas, Venezuela', 'Maracaibo, Venezuela', 'Valencia, Venezuela']
+  }
+  if (/^uruguay$/i.test(u) || /,\s*uruguay$/i.test(u)) {
+    return ['Montevideo, Uruguay', 'Salto, Uruguay', 'Paysandú, Uruguay']
+  }
+  if (/^paraguay$/i.test(u) || /,\s*paraguay$/i.test(u)) {
+    return ['Asunción, Paraguay', 'Ciudad del Este, Paraguay', 'Encarnación, Paraguay']
+  }
+  if (/^bolivia$/i.test(u) || /,\s*bolivia$/i.test(u)) {
+    return ['La Paz, Bolivia', 'Santa Cruz, Bolivia', 'Cochabamba, Bolivia']
+  }
+  if (/^cuba$/i.test(u) || /,\s*cuba$/i.test(u)) {
+    return ['La Habana, Cuba', 'Santiago de Cuba', 'Camagüey, Cuba']
+  }
+  if (/^rep[uú]blica\s+dominicana$/i.test(u) || /,\s*rep[uú]blica\s+dominicana$/i.test(u)) {
+    return [
+      'Santo Domingo, República Dominicana',
+      'Santiago de los Caballeros, República Dominicana',
+      'Punta Cana, República Dominicana',
+    ]
+  }
+  if (/^puerto\s+rico$/i.test(u) || /,\s*puerto\s+rico$/i.test(u)) {
+    return ['San Juan, Puerto Rico', 'Ponce, Puerto Rico', 'Bayamón, Puerto Rico']
+  }
+
+  return []
 }
 
-/**
- * Fase primaria: Places API (New) v1. Una sola llamada devuelve nombre, dirección
- * completa, teléfono internacional y URL del sitio web — sin Place Details extra.
- * Pagina con `nextPageToken` hasta cubrir el cupo o agotar resultados (~60).
- */
-async function scrapeGooglePlacesNewApi(
-  categoria: string,
+/** Construye varias variaciones de consulta para maximizar cobertura. */
+function buildPlacesSearchQueries(categoria: string, ubicacion: string): string[] {
+  const cat = categoria.replace(/\s+/g, ' ').trim()
+  const loc = ubicacion.replace(/\s+/g, ' ').trim()
+  if (!cat) return []
+  if (!loc) return [cat]
+
+  const seen = new Set<string>()
+  const out: string[] = []
+  const push = (q: string) => {
+    const cleaned = q.replace(/\s+/g, ' ').trim()
+    if (!cleaned) return
+    const k = cleaned.toLowerCase()
+    if (seen.has(k)) return
+    seen.add(k)
+    out.push(cleaned)
+  }
+
+  const subs = expandSubRegions(loc)
+  if (subs.length > 0) {
+    /** Si la ubicación es amplia, omitimos la consulta cruda (saturaría una sola zona)
+     * y arrancamos por ciudades para distribuir cobertura. */
+    for (const sub of subs) push(`${cat} ${sub}`)
+  } else {
+    push(`${cat} en ${loc}`)
+    push(`${cat} ${loc}`)
+  }
+  return out
+}
+
+/** Mensajes humanos según el código de error de Places API (New). */
+function explainPlacesV1Error(httpStatus: number, msg: string): string {
+  if (/Places API \(New\) has not been used|SERVICE_DISABLED/i.test(msg)) {
+    return 'Places API (New) NO está habilitada en el proyecto. Habilítala en Google Cloud → APIs y servicios → Biblioteca → buscar "Places API (New)" → Activar.'
+  }
+  if (/billing/i.test(msg)) {
+    return 'La cuenta de facturación no está activa en el proyecto de Google Cloud (Places API requiere billing).'
+  }
+  if (/API keys with referer/i.test(msg) || /referer/i.test(msg)) {
+    return 'La clave tiene restricción de Referer (web). Cambia la restricción a "Direcciones IP" o "Ninguna" para que funcione en el servidor.'
+  }
+  if (/API key not valid|API_KEY_INVALID/i.test(msg)) {
+    return 'API key inválida (regenera la clave en Google Cloud → Credentials).'
+  }
+  if (httpStatus === 403) return `Permiso denegado: ${msg}`
+  if (httpStatus === 400) return `Petición rechazada: ${msg}`
+  if (httpStatus === 429) return `Cuota agotada: ${msg}`
+  return `HTTP ${httpStatus}: ${msg}`
+}
+
+/** Una sola consulta a Places v1, paginando hasta 3 páginas. Devuelve emitidos y si la API falló de raíz. */
+async function runPlacesV1Query(
+  textQuery: string,
+  key: string,
+  regionCode: string | undefined,
+  languageCode: string,
   ubicacion: string,
   emit: ScrapeEmit,
   log: (m: string) => void,
-): Promise<void> {
-  const key = placesServerApiKey()
-  if (!key) return
-  const textQuery = `${categoria} en ${ubicacion}`.replace(/\s+/g, ' ').trim()
-  if (!textQuery) return
+): Promise<{ gained: number; fatal: boolean }> {
   const before = emit.count()
-
-  const regionCode = regionCodeForUbicacion(ubicacion)
-  const languageCode = languageCodeForUbicacion(ubicacion)
   let pageToken: string | undefined
-
-  for (let pageIdx = 0; pageIdx < 4 && !emit.full() && !emit.timeUp(); pageIdx++) {
-    const body: Record<string, unknown> = {
-      textQuery,
-      pageSize: 20,
-      languageCode,
-    }
+  for (let pageIdx = 0; pageIdx < 3 && !emit.full() && !emit.timeUp(); pageIdx++) {
+    const body: Record<string, unknown> = { textQuery, pageSize: 20, languageCode }
     if (regionCode) body.regionCode = regionCode
     if (pageToken) body.pageToken = pageToken
 
@@ -1351,24 +1481,44 @@ async function scrapeGooglePlacesNewApi(
           ].join(','),
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(28_000),
+        signal: AbortSignal.timeout(20_000),
       })
     } catch (e) {
-      log(`[scraper] Places v1: red ${e instanceof Error ? e.message : String(e)}`)
-      return
+      log(`[places-v1] "${textQuery}" p${pageIdx + 1}: ERROR red (${e instanceof Error ? e.message : String(e)})`)
+      return { gained: emit.count() - before, fatal: false }
     }
 
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as PlacesV1Response | null
       const msg = data?.error?.message ?? `HTTP ${res.status}`
-      log(`[scraper] Places v1 ${res.status}: ${msg}`)
-      return
+      log(`[places-v1] "${textQuery}" p${pageIdx + 1}: ${explainPlacesV1Error(res.status, msg)}`)
+      /** Errores de configuración (auth, API deshabilitada) son fatales — no insistas con más consultas. */
+      const fatal =
+        res.status === 401 ||
+        res.status === 403 ||
+        /SERVICE_DISABLED|API key|referer|billing|PERMISSION_DENIED/i.test(msg)
+      return { gained: emit.count() - before, fatal }
     }
 
     const data = (await res.json()) as PlacesV1Response
     const rows = data.places ?? []
-    for (const r of rows) {
-      if (emit.timeUp() || emit.full()) return
+    pageToken = data.nextPageToken?.trim()
+    log(
+      `[places-v1] "${textQuery}" p${pageIdx + 1}: ${rows.length} places · siguiente=${pageToken ? 'sí' : 'no'} · acum ${emit.count()}`,
+    )
+    if (rows.length === 0) break
+
+    /** Email-scraping en paralelo (limita el cuello de botella de 6 s por fila). */
+    const emailsPromises: Promise<string>[] = rows.map(r => {
+      const webRaw = (r.websiteUri ?? '').trim()
+      if (!webRaw || !scrapeWantsFetchEmailFromWeb() || isGoogleOwnedUrl(webRaw)) return Promise.resolve('')
+      return scrapeFetchEmailFromUrl(webRaw).catch(() => '')
+    })
+    const emails = await Promise.all(emailsPromises)
+
+    for (let i = 0; i < rows.length; i++) {
+      if (emit.timeUp() || emit.full()) break
+      const r = rows[i]
       const pid = (r.id ?? '').trim()
       const name = (r.displayName?.text ?? '').trim()
       if (!pid || !name) continue
@@ -1381,17 +1531,13 @@ async function scrapeGooglePlacesNewApi(
         (r.googleMapsUri ?? '').trim() ||
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(pid)}`
       const sitioWeb = webRaw && !isGoogleOwnedUrl(webRaw) ? webRaw : mapsLink
-      let correo = ''
-      if (webRaw && scrapeWantsFetchEmailFromWeb() && !isGoogleOwnedUrl(webRaw)) {
-        correo = await scrapeFetchEmailFromUrl(webRaw)
-      }
       emit.tryEmit(dedupe, {
         nombre: name,
         direccion,
         ciudad,
         pais,
         telefono,
-        correo,
+        correo: emails[i] ?? '',
         sitioWeb,
         problemasDetectados: '',
         oportunidades: '',
@@ -1399,36 +1545,75 @@ async function scrapeGooglePlacesNewApi(
       })
     }
 
-    pageToken = data.nextPageToken?.trim()
-    if (!pageToken || rows.length === 0) break
+    if (!pageToken) break
     /** Google requiere ~2 s entre páginas para que el token quede activo. */
-    await delay(1900, 2400)
+    await delay(1900, 2300)
   }
-
-  const gained = emit.count() - before
-  if (gained > 0) log(`[scraper] Places v1: +${gained} negocios (total ${emit.count()})`)
-  else log('[scraper] Places v1: 0 negocios devueltos para esta consulta.')
+  return { gained: emit.count() - before, fatal: false }
 }
 
-/** Fallback cuando el scraping de Maps no devuelve filas (p. ej. anti-bot en Vercel). Requiere clave solo en servidor. */
-async function scrapeGooglePlacesTextSearchApi(
+/**
+ * Fase primaria: Places API (New) v1 con expansión a múltiples ciudades para
+ * ubicaciones amplias (estados/países). Una sola llamada por página devuelve
+ * NAP completo + web — sin Place Details extra.
+ */
+async function scrapeGooglePlacesNewApi(
   categoria: string,
   ubicacion: string,
   emit: ScrapeEmit,
   log: (m: string) => void,
-): Promise<void> {
-  const key =
-    process.env.GOOGLE_PLACES_API_KEY?.trim() ||
-    process.env.GOOGLE_MAPS_API_KEY?.trim()
-  if (!key) return
+): Promise<{ ok: boolean; gained: number }> {
+  const key = placesServerApiKey()
+  if (!key) {
+    log('[places-v1] omitido: GOOGLE_PLACES_API_KEY no configurada.')
+    return { ok: false, gained: 0 }
+  }
+  const queries = buildPlacesSearchQueries(categoria, ubicacion)
+  if (queries.length === 0) return { ok: true, gained: 0 }
 
-  const query = `${categoria} ${ubicacion}`.replace(/\s+/g, ' ').trim()
-  if (!query) return
+  const preview = queries.slice(0, 6).map(q => `"${q}"`).join(', ')
+  log(
+    `[places-v1] inicio · ${queries.length} consulta${queries.length === 1 ? '' : 's'}: ${preview}${queries.length > 6 ? '…' : ''}`,
+  )
 
+  const regionCode = regionCodeForUbicacion(ubicacion)
+  const languageCode = languageCodeForUbicacion(ubicacion)
+  const before = emit.count()
+
+  for (let qi = 0; qi < queries.length; qi++) {
+    if (emit.full() || emit.timeUp()) break
+    const q = queries[qi]
+    const r = await runPlacesV1Query(q, key, regionCode, languageCode, ubicacion, emit, log)
+    log(`[places-v1] consulta ${qi + 1}/${queries.length} "${q}" → +${r.gained} (acum ${emit.count()})`)
+    if (r.fatal) {
+      log('[places-v1] aborto: error fatal de API (auth/setup). Probaré con la API legacy.')
+      return { ok: false, gained: emit.count() - before }
+    }
+  }
+
+  const gained = emit.count() - before
+  log(`[places-v1] fin · +${gained} negocios totales (acum ${emit.count()})`)
+  return { ok: true, gained }
+}
+
+type PlacesLegacyResponse = {
+  status?: string
+  error_message?: string
+  results?: { place_id?: string; name?: string; formatted_address?: string }[]
+  next_page_token?: string
+}
+
+/** Una sola consulta legacy con paginación (hasta 3 páginas, ~60 resultados). */
+async function runPlacesLegacyQuery(
+  query: string,
+  key: string,
+  ubicacion: string,
+  emit: ScrapeEmit,
+  log: (m: string) => void,
+): Promise<{ gained: number; fatal: boolean }> {
   const before = emit.count()
   let nextPageToken: string | undefined
-
-  for (let pageIdx = 0; pageIdx < 5 && !emit.full() && !emit.timeUp(); pageIdx++) {
+  for (let pageIdx = 0; pageIdx < 3 && !emit.full() && !emit.timeUp(); pageIdx++) {
     const u = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
     u.searchParams.set('query', query)
     u.searchParams.set('key', key)
@@ -1436,60 +1621,71 @@ async function scrapeGooglePlacesTextSearchApi(
 
     let res: Response
     try {
-      res = await fetch(u.toString(), { signal: AbortSignal.timeout(28_000) })
+      res = await fetch(u.toString(), { signal: AbortSignal.timeout(20_000) })
     } catch (e) {
-      log(`[scraper] Places API: red ${e instanceof Error ? e.message : String(e)}`)
-      return
+      log(`[places-legacy] "${query}" p${pageIdx + 1}: red ${e instanceof Error ? e.message : String(e)}`)
+      return { gained: emit.count() - before, fatal: false }
     }
     if (!res.ok) {
-      log(`[scraper] Places API HTTP ${res.status}`)
-      return
+      log(`[places-legacy] "${query}" p${pageIdx + 1}: HTTP ${res.status}`)
+      return { gained: emit.count() - before, fatal: res.status === 403 || res.status === 401 }
     }
-    const data = (await res.json()) as {
-      status: string
-      error_message?: string
-      results?: { place_id?: string; name?: string; formatted_address?: string }[]
-      next_page_token?: string
-    }
+    const data = (await res.json()) as PlacesLegacyResponse
 
     if (data.status === 'REQUEST_DENIED' || data.status === 'INVALID_REQUEST') {
-      log(`[scraper] Places API ${data.status}: ${data.error_message ?? '(sin mensaje)'}`)
-      return
+      log(`[places-legacy] "${query}" p${pageIdx + 1}: ${data.status} — ${data.error_message ?? '(sin mensaje)'}`)
+      return { gained: emit.count() - before, fatal: true }
     }
     if (data.status === 'OVER_QUERY_LIMIT') {
       await delay(2200, 2800)
       continue
     }
     if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      log(`[scraper] Places API status=${data.status}`)
-      return
+      log(`[places-legacy] "${query}" p${pageIdx + 1}: status=${data.status} ${data.error_message ?? ''}`)
+      return { gained: emit.count() - before, fatal: false }
     }
 
     const rows = data.results ?? []
-    for (const r of rows) {
-      if (emit.timeUp() || emit.full()) return
+    nextPageToken = data.next_page_token?.trim()
+    log(
+      `[places-legacy] "${query}" p${pageIdx + 1}: ${rows.length} resultados · siguiente=${nextPageToken ? 'sí' : 'no'} · acum ${emit.count()}`,
+    )
+    if (rows.length === 0) break
+
+    /** Detalles + emails en paralelo para no quemar 6 s por fila. */
+    const detailsPromises = rows.map(r => {
+      const pid = (r.place_id ?? '').trim()
+      return pid ? fetchGooglePlaceDetailsResult(pid, key) : Promise.resolve(null)
+    })
+    const details = await Promise.all(detailsPromises)
+    const emailsPromises = details.map(det => {
+      const web = (det?.website ?? '').trim()
+      if (!web || !scrapeWantsFetchEmailFromWeb() || isGoogleOwnedUrl(web)) return Promise.resolve('')
+      return scrapeFetchEmailFromUrl(web).catch(() => '')
+    })
+    const emails = await Promise.all(emailsPromises)
+
+    for (let i = 0; i < rows.length; i++) {
+      if (emit.timeUp() || emit.full()) break
+      const r = rows[i]
       const pid = (r.place_id ?? '').trim()
       const name = (r.name ?? '').trim()
       if (!pid || !name) continue
+      const det = details[i]
       const dedupe = `gplaces|${pid}`
-      const det = await fetchGooglePlaceDetailsResult(pid, key)
       const addrStr = (det?.formatted_address ?? r.formatted_address ?? '').trim()
       const { direccion, ciudad, pais } = splitDireccionResultado(addrStr, ubicacion)
       const telefono = (det?.international_phone_number ?? det?.formatted_phone_number ?? '').trim()
       const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(pid)}`
       let sitioWeb = (det?.website ?? '').trim()
       if (!sitioWeb || isGoogleOwnedUrl(sitioWeb)) sitioWeb = mapsLink
-      let correo = ''
-      const webForMail = (det?.website ?? '').trim()
-      if (webForMail && scrapeWantsFetchEmailFromWeb() && !/^https?:\/\/(www\.)?google\./i.test(webForMail))
-        correo = await scrapeFetchEmailFromUrl(webForMail)
       emit.tryEmit(dedupe, {
         nombre: name,
         direccion,
         ciudad,
         pais,
         telefono,
-        correo,
+        correo: emails[i] ?? '',
         sitioWeb,
         problemasDetectados: '',
         oportunidades: '',
@@ -1497,13 +1693,45 @@ async function scrapeGooglePlacesTextSearchApi(
       })
     }
 
-    nextPageToken = data.next_page_token?.trim()
-    if (!nextPageToken || rows.length === 0) break
+    if (!nextPageToken) break
     await delay(2100, 2600)
   }
+  return { gained: emit.count() - before, fatal: false }
+}
 
+/** Places API legacy (Text Search). Fallback cuando v1 está deshabilitada. */
+async function scrapeGooglePlacesTextSearchApi(
+  categoria: string,
+  ubicacion: string,
+  emit: ScrapeEmit,
+  log: (m: string) => void,
+): Promise<{ ok: boolean; gained: number }> {
+  const key = placesServerApiKey()
+  if (!key) return { ok: false, gained: 0 }
+
+  const queries = buildPlacesSearchQueries(categoria, ubicacion)
+  if (queries.length === 0) return { ok: true, gained: 0 }
+  log(
+    `[places-legacy] inicio · ${queries.length} consulta${queries.length === 1 ? '' : 's'}: ${queries
+      .slice(0, 6)
+      .map(q => `"${q}"`)
+      .join(', ')}${queries.length > 6 ? '…' : ''}`,
+  )
+
+  const before = emit.count()
+  for (let qi = 0; qi < queries.length; qi++) {
+    if (emit.full() || emit.timeUp()) break
+    const q = queries[qi]
+    const r = await runPlacesLegacyQuery(q, key, ubicacion, emit, log)
+    log(`[places-legacy] consulta ${qi + 1}/${queries.length} "${q}" → +${r.gained} (acum ${emit.count()})`)
+    if (r.fatal) {
+      log('[places-legacy] aborto: error fatal de API.')
+      return { ok: false, gained: emit.count() - before }
+    }
+  }
   const gained = emit.count() - before
-  if (gained > 0) log(`[scraper] Places API: +${gained} negocios (total ${emit.count()})`)
+  log(`[places-legacy] fin · +${gained} negocios totales (acum ${emit.count()})`)
+  return { ok: true, gained }
 }
 
 // ── Browser + orquestación ──────────────────────────────────────────────────
@@ -1592,38 +1820,47 @@ export async function streamScrapeNegocios(
   const placesKey = placesServerApiKey()
   let placesV1Ok = false
   let placesLegacyOk = false
-  if (placesKey) {
-    placesV1Ok = await placesV1WorksOnServer(placesKey, log)
-    if (!placesV1Ok) {
-      placesLegacyOk = await placesApiWorksOnServer(placesKey, log)
-    }
-  } else {
+  if (!placesKey) {
     log(
-      '[scraper] Sin GOOGLE_PLACES_API_KEY: teléfono, web y correo dependen del DOM de Maps. Añade la clave en .env.local.',
+      '[scraper] Sin GOOGLE_PLACES_API_KEY: solo se intentará Maps DOM (lento, frágil). Añade la clave en .env.local con Places API (New) habilitada para resultados confiables.',
     )
   }
 
   try {
     const auditBudget = { n: auditBudgetForRun(requested) }
 
-    if (placesV1Ok && !emit.full()) {
-      log('[scraper] Fase 1: Places API (New) v1 — datos completos en una llamada')
-      await scrapeGooglePlacesNewApi(categoria, ubicacion, emit, log).catch(err => {
+    if (placesKey && !emit.full()) {
+      log('[scraper] Fase 1: Places API (New) v1 — multi-query')
+      try {
+        const { ok, gained } = await scrapeGooglePlacesNewApi(categoria, ubicacion, emit, log)
+        placesV1Ok = ok
+        log(`[scraper] tras Places v1 → +${gained} (acum ${emit.count()}/${requested}, ok=${ok})`)
+      } catch (err) {
         console.error('[scraper] Places v1 (fase 1) failed:', err instanceof Error ? err.message : err)
-      })
-      log(`[scraper] tras Places v1 → ${emit.count()}/${requested}`)
-    } else if (placesLegacyOk && !emit.full()) {
-      log('[scraper] Fase 1: Places API (legacy)')
-      await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log).catch(err => {
-        console.error('[scraper] Places legacy (fase 1) failed:', err instanceof Error ? err.message : err)
-      })
-      log(`[scraper] tras Places legacy → ${emit.count()}/${requested}`)
+      }
+    }
+
+    if (placesKey && !placesV1Ok && !emit.full()) {
+      log('[scraper] Fase 2: Places API legacy (fallback) — multi-query')
+      try {
+        const { ok, gained } = await scrapeGooglePlacesTextSearchApi(categoria, ubicacion, emit, log)
+        placesLegacyOk = ok
+        log(`[scraper] tras Places legacy → +${gained} (acum ${emit.count()}/${requested}, ok=${ok})`)
+      } catch (err) {
+        console.error('[scraper] Places legacy (fase 2) failed:', err instanceof Error ? err.message : err)
+      }
+    }
+
+    /** Si Places ya nos dio el 80% (o más), no perdemos tiempo en Maps DOM. */
+    const placesEnough = emit.count() >= Math.max(1, Math.ceil(requested * 0.8))
+    if (placesEnough) {
+      log(`[scraper] Places cubrió ${emit.count()}/${requested}: omitiendo Maps DOM y Páginas Amarillas.`)
     }
 
     let round = 0
-    while (!emit.full() && !emit.timeUp()) {
+    while (!placesEnough && !emit.full() && !emit.timeUp()) {
       round++
-      log(`[scraper] ronda ${round} (hasta ${requested}, ${emit.count()} ya guardados)`)
+      log(`[scraper] Fase 3 ronda ${round}: Maps DOM (hasta ${requested}, ${emit.count()} ya guardados)`)
       const before = emit.count()
 
       await scrapeGoogleMaps(
@@ -1644,7 +1881,7 @@ export async function streamScrapeNegocios(
       if (emit.full()) break
 
       if (emit.count() < requested) {
-        log('[scraper] complemento: Páginas Amarillas (directorio web)')
+        log('[scraper] Fase 4: Páginas Amarillas (directorio web)')
         await scrapePaginasAmarillas(browser, categoria, ubicacion, requested - emit.count(), emit, log, auditBudget).catch(
           err => {
             console.error('[scraper] Páginas Amarillas failed:', err instanceof Error ? err.message : err)
@@ -1662,9 +1899,9 @@ export async function streamScrapeNegocios(
       }
     }
 
-    if ((placesV1Ok || placesLegacyOk) && emit.count() < requested) {
-      emit.extendDeadline(50_000)
-      log('[scraper] Fase final: Places API (completar cupo)')
+    if ((placesV1Ok || placesLegacyOk) && emit.count() < requested && !emit.timeUp()) {
+      emit.extendDeadline(40_000)
+      log('[scraper] Fase final: Places API (reintento para completar cupo)')
       if (placesV1Ok) {
         await scrapeGooglePlacesNewApi(categoria, ubicacion, emit, log).catch(err => {
           console.error('[scraper] Places v1 (fase final) failed:', err instanceof Error ? err.message : err)
