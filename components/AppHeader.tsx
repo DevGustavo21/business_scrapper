@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Building2, Clock, Menu, X } from 'lucide-react'
+import { Clock, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AuthNav } from '@/components/AuthNav'
+import { BrandLogo } from '@/components/BrandLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NotificationsPopover } from '@/components/NotificationsPopover'
 
@@ -84,14 +85,7 @@ function HeaderInner({
         >
           {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
-        <Link href="/" className="flex items-center gap-2 min-w-0 group">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-700 transition-colors">
-            <Building2 size={14} className="text-white" />
-          </div>
-          <span className="font-semibold text-sm tracking-tight text-neutral-900 dark:text-neutral-100 truncate max-w-[9rem] sm:max-w-none">
-            Business Prospector
-          </span>
-        </Link>
+        <BrandLogo />
       </div>
 
       <nav className="hidden sm:flex items-center gap-0.5" aria-label="Principal">
