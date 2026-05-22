@@ -2,19 +2,8 @@ import * as XLSX from 'xlsx'
 import type { Negocio } from '@/types/business'
 
 export function exportToExcel(negocios: Negocio[], categoria: string, etiquetaUbicacion: string): void {
-  const headers = [
-    '#',
-    'Nombre',
-    'Dirección',
-    'Ciudad',
-    'País',
-    'Teléfono',
-    'Correo',
-    'Sitio web',
-    'Problemas detectados',
-    'Oportunidades',
-    'Estado',
-  ]
+  /** Observaciones del equipo (problemas/oportunidades) viven solo en la ficha del negocio, no en el Excel. */
+  const headers = ['#', 'Nombre', 'Dirección', 'Ciudad', 'País', 'Teléfono', 'Correo', 'Sitio web', 'Estado']
   const rows = negocios.map((n, i) => [
     i + 1,
     n.nombre,
@@ -24,8 +13,6 @@ export function exportToExcel(negocios: Negocio[], categoria: string, etiquetaUb
     n.telefono,
     n.correo,
     n.sitioWeb,
-    n.problemasDetectados,
-    n.oportunidades,
     n.estado,
   ])
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])

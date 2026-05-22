@@ -8,6 +8,10 @@ import { CONTACTO_ESTADOS, type ContactoEstado, type NegocioFila } from '@/types
 type ColKey = '#' | 'origen' | keyof NegocioFila | 'prospecto' | 'eliminar'
 type Dir = 'asc' | 'desc'
 
+/**
+ * Columnas de listado. «Problemas detectados» y «Oportunidades» son observaciones del
+ * equipo y viven solo en la vista de detalle (single negocio), no en tablas / Excel.
+ */
 const MID_COLS: { key: keyof NegocioFila; label: string }[] = [
   { key: 'nombre', label: 'Nombre' },
   { key: 'direccion', label: 'Dirección' },
@@ -16,8 +20,6 @@ const MID_COLS: { key: keyof NegocioFila; label: string }[] = [
   { key: 'telefono', label: 'Teléfono' },
   { key: 'correo', label: 'Correo' },
   { key: 'sitioWeb', label: 'Sitio web' },
-  { key: 'problemasDetectados', label: 'Problemas detectados' },
-  { key: 'oportunidades', label: 'Oportunidades' },
 ]
 
 const WEBSITE_LABEL_MAX = 30
@@ -206,7 +208,7 @@ export function ResultsTable({
         </p>
       )}
       <div className="w-full overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-800">
-        <table className="w-full text-sm min-w-[1100px]">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="bg-neutral-50 dark:bg-neutral-900/60 border-b border-neutral-200 dark:border-neutral-800">
               {cols.map(col => (
@@ -365,7 +367,7 @@ export function ResultsTable({
                         <CellText text={n.direccion} narrow />
                       </td>
                     )
-                  if (k === 'correo' || k === 'problemasDetectados' || k === 'oportunidades')
+                  if (k === 'correo')
                     return (
                       <td key={k} className="px-3 py-3 max-w-[140px]">
                         <CellText text={String(n[k] ?? '')} narrow />

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Search, Loader2 } from 'lucide-react'
+import { LocationAutocomplete } from '@/components/LocationAutocomplete'
 
 const OPTS = [12, 24, 36, 48, 100]
 const input =
@@ -41,17 +42,16 @@ export function SearchPanel({ onSearch, loading }: Props) {
           <label htmlFor="ubi" className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
             Ubicación de la búsqueda
           </label>
-          <input
+          <LocationAutocomplete
             id="ubi"
-            type="text"
             value={ubicacion}
-            onChange={e => setUbicacion(e.target.value)}
-            placeholder="Ej: Madrid España, Managua Nicaragua…"
+            onChange={setUbicacion}
+            placeholder="Ej: Madrid, España · Florida, Estados Unidos · Managua, Nicaragua"
             disabled={loading}
-            className={input}
           />
           <p className="text-xs text-neutral-500 dark:text-neutral-500">
-            Dirección, ciudad y país de cada negocio se rellenan en la tabla a partir del resultado (Maps o directorio).
+            Empieza a escribir un país, estado o ciudad y elige una sugerencia para mejores resultados. También puedes
+            escribir libremente.
           </p>
         </div>
         <div className="flex gap-3">
