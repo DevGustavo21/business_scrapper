@@ -1,10 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useState } from 'react'
-import { Building2 } from 'lucide-react'
-import { ThemeToggle } from '@/components/ThemeToggle'
+import { LandingHeader } from '@/components/LandingHeader'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { isSupabaseConfigured } from '@/lib/supabase/env'
 
@@ -111,18 +109,8 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-[--color-background]/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <Building2 size={14} className="text-white" />
-            </div>
-            <span className="font-semibold text-base text-neutral-900 dark:text-neutral-100">Business Prospector</span>
-          </Link>
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col bg-neutral-50 dark:bg-[#06070a]">
+      <LandingHeader />
       <main className="flex-1 flex items-center justify-center px-6 py-16">
         <Suspense fallback={<div className="text-neutral-500 text-sm">Cargando…</div>}>
           <LoginForm />

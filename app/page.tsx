@@ -4,6 +4,7 @@ import { Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
+import { Landing } from '@/components/Landing'
 import { cn } from '@/lib/utils'
 import { SearchPanel } from '@/components/SearchPanel'
 import { ResultsTable } from '@/components/ResultsTable'
@@ -565,6 +566,18 @@ function HomeInner() {
   )
 
   const loggedIn = Boolean(user && isSupabaseConfigured())
+
+  if (user === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
+        Cargando…
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Landing />
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
