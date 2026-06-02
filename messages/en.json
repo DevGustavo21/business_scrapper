@@ -60,10 +60,30 @@
       "tableCity": "City",
       "tableStatus": "Status",
       "rows": {
-        "first": { "name": "Clínica Dental Sonrisa", "city": "Madrid · ES", "phone": "+34 91 234 5678", "status": "Interested" },
-        "second": { "name": "Dentamed Centro Dental", "city": "Madrid · ES", "phone": "+34 91 555 0123", "status": "Contacted" },
-        "third": { "name": "Ortodoncia Premium", "city": "Madrid · ES", "phone": "+34 91 877 4421", "status": "Pending" },
-        "fourth": { "name": "Estética Dental Salamanca", "city": "Madrid · ES", "phone": "+34 91 902 3344", "status": "Customer" }
+        "first": {
+          "name": "Clínica Dental Sonrisa",
+          "city": "Madrid · ES",
+          "phone": "+34 91 234 5678",
+          "status": "Interested"
+        },
+        "second": {
+          "name": "Dentamed Centro Dental",
+          "city": "Madrid · ES",
+          "phone": "+34 91 555 0123",
+          "status": "Contacted"
+        },
+        "third": {
+          "name": "Ortodoncia Premium",
+          "city": "Madrid · ES",
+          "phone": "+34 91 877 4421",
+          "status": "Pending"
+        },
+        "fourth": {
+          "name": "Estética Dental Salamanca",
+          "city": "Madrid · ES",
+          "phone": "+34 91 902 3344",
+          "status": "Customer"
+        }
       },
       "liveStatus": "Live extraction · 4/12 businesses",
       "exportLabel": "Export to Excel"
@@ -89,9 +109,18 @@
         }
       },
       "stats": {
-        "first": { "value": "98%", "label": "of searches finish with clean, deduplicated data" },
-        "second": { "value": "7.2k+", "label": "businesses extracted every month by active teams" },
-        "third": { "value": "<1 min", "label": "average end-to-end search time" }
+        "first": {
+          "value": "98%",
+          "label": "of searches finish with clean, deduplicated data"
+        },
+        "second": {
+          "value": "7.2k+",
+          "label": "businesses extracted every month by active teams"
+        },
+        "third": {
+          "value": "<1 min",
+          "label": "average end-to-end search time"
+        }
       }
     },
     "missions": {
@@ -150,10 +179,22 @@
         "fourth": "Antojería Casa Pepa · Coyoacán"
       },
       "foldersPreview": {
-        "first": { "name": "Q3 Campaign", "searches": "{count} searches" },
-        "second": { "name": "Mexico City", "searches": "{count} searches" },
-        "third": { "name": "Madrid", "searches": "{count} searches" },
-        "fourth": { "name": "Shared", "searches": "{count} searches" }
+        "first": {
+          "name": "Q3 Campaign",
+          "searches": "{count} searches"
+        },
+        "second": {
+          "name": "Mexico City",
+          "searches": "{count} searches"
+        },
+        "third": {
+          "name": "Madrid",
+          "searches": "{count} searches"
+        },
+        "fourth": {
+          "name": "Shared",
+          "searches": "{count} searches"
+        }
       }
     },
     "steps": {
@@ -356,5 +397,286 @@
       "ctaSecondary": "Back to home"
     },
     "footerNote": "© {year} Business Prospector · Prices subject to change without notice"
+  },
+  "brand": {
+    "tagline": "AI scraping suite"
+  },
+  "appHeader": {
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close menu",
+    "menu": "Menu",
+    "language": "Language",
+    "theme": "Theme",
+    "openHistory": "Open search history",
+    "closeHistory": "Close search history",
+    "historyTitle": "Search history"
+  },
+  "authNav": {
+    "signIn": "Sign in",
+    "greeting": "Hi, {name}",
+    "settings": "Settings",
+    "logout": "Sign out",
+    "logoutTitle": "Sign out?",
+    "logoutMessage": "Are you sure you want to sign out? You will need to sign in again to access your prospects and lists.",
+    "logoutConfirm": "Yes, sign out"
+  },
+  "dashboard": {
+    "heroTitle": "Prospect businesses in seconds",
+    "heroSubtitle": "Every search stays in your side history when signed in. Anything a teammate shares in a folder opens in a separate shared view, not mixed into your history.",
+    "loginPrefix": "Sign in",
+    "loginSuffix": "to save your searches, history, and prospect marks.",
+    "prospectHint": "When you click the heart, choose whether it goes to your personal list or to a shared list (new or existing).",
+    "shareSearch": "Share search",
+    "addToFolder": "Add to folder",
+    "deleteRowTitle": "Remove this row from the search",
+    "sharedListFallback": "Shared list",
+    "deleteSearchTitle": "Delete search from history",
+    "deleteSearchMessage": "“{label}” will be removed from history. This action cannot be undone.",
+    "deleteBusinessTitle": "Delete business",
+    "deleteBusinessMessage": "“{name}” will be removed from the results and saved search. If it was marked as a prospect, it will also be deleted from Client prospects.",
+    "footer": "Personal use — extracts public data available on the internet",
+    "loading": "Loading…",
+    "loadSearchError": "The search could not be loaded.",
+    "loadingSources": "Sources: Google Maps and, if needed, Yellow Pages. Rows are added live; full extraction can take up to about 4 minutes. Once you see data in the table, the search keeps running in the background until the button returns to “Search”.",
+    "signInToMark": "Sign in to mark prospects."
+  },
+  "searchPanel": {
+    "categoryLabel": "Business category",
+    "categoryPlaceholder": "Ex: dentists, restaurants, gyms…",
+    "locationLabel": "Search location",
+    "locationPlaceholder": "Ex: Madrid, Spain · Florida, United States · Managua, Nicaragua",
+    "locationHelp": "Start typing a country, state, or city and choose a suggestion for better results. You can also type freely.",
+    "quantityLabel": "Number of results",
+    "businessesOption": "{count} businesses",
+    "search": "Search",
+    "searching": "Searching…"
+  },
+  "resultsTable": {
+    "columns": {
+      "name": "Name",
+      "address": "Address",
+      "city": "City",
+      "country": "Country",
+      "phone": "Phone",
+      "email": "Email",
+      "website": "Website",
+      "origin": "Origin",
+      "prospect": "Prospect?",
+      "status": "Status",
+      "delete": "Delete"
+    },
+    "originManual": "Manual",
+    "originSearch": "Search",
+    "records": "{count, plural, one {record} other {records}}",
+    "businessesFound": "{count, plural, one {business found} other {businesses found}}",
+    "upToRequested": " / up to {requested} requested",
+    "connecting": " · connecting to the server…",
+    "streaming": " · still extracting in the background (this can take several more minutes; you can already use the table and export).",
+    "loading": "Loading…",
+    "extracting": "Extracting…",
+    "serverStreaming": "The server is still sending businesses; rows will appear here as they arrive…",
+    "removeFromClientProspects": "Remove from client prospects",
+    "removeFromProspects": "Remove from prospects",
+    "markAsProspect": "Mark as prospect",
+    "deleteFullRow": "Delete this row completely",
+    "deleteRow": "Delete row",
+    "statuses": {
+      "Sin contactar": "Not contacted",
+      "Contactado": "Contacted",
+      "Interesado": "Interested",
+      "No interesado": "Not interested",
+      "Cliente": "Customer"
+    }
+  },
+  "exportButton": {
+    "label": "Export to Excel"
+  },
+  "searchComplete": {
+    "close": "Close",
+    "ok": "Got it",
+    "query": "Query:",
+    "finished": "Search finished",
+    "emptyTitle": "Search finished with no results",
+    "emptyDetail": "No businesses could be extracted with the selected criteria. Try another category, widen the area, or check the connection.",
+    "completedTitle": "Search completed",
+    "completedDetail": "Goal reached: {total} {businesses} (requested: {requested}). You can now review the table and export to Excel if needed.",
+    "timeoutTitle": "Search finished by time",
+    "timeoutPartialDetail": "The maximum extraction time expired before reaching {requested} businesses. {total} {results} were saved; you can export them or launch another search.",
+    "timeoutCoveredDetail": "{total} {businesses} were obtained (requested: {requested}). The search closed because of the time limit with the quota covered.",
+    "fallbackDetail": "Result: {total} {businesses} out of {requested} requested. Close reason: {reason}.",
+    "businessSingular": "business",
+    "businessPlural": "businesses",
+    "resultSingular": "result",
+    "resultPlural": "results",
+    "reasonTargetMet": "goal reached",
+    "reasonTimeout": "maximum time"
+  },
+  "folders": {
+    "title": "Search folders",
+    "subtitle": "Group searches from your history and share the folder by email. Searches stay in your account; guests see them in a shared context.",
+    "back": "← Back to search",
+    "loginPrefix": "Sign in",
+    "loginSuffix": "to use shared folders.",
+    "yourFolders": "Your folders",
+    "newPlaceholder": "New folder…",
+    "create": "Create",
+    "loading": "Loading…",
+    "emptyFolders": "Create a folder and add searches from Home.",
+    "owner": "Owner",
+    "shared": "Shared",
+    "selectFolder": "Select a folder.",
+    "name": "Name",
+    "save": "Save",
+    "share": "Share",
+    "delete": "Delete",
+    "searchesInFolder": "Searches in this folder",
+    "emptySearches": "There are no linked searches yet.",
+    "remove": "Remove",
+    "deleteConfirm": "Delete this folder and its search links? The searches themselves will not be deleted.",
+    "genericError": "Error",
+    "resultCount": "{count}/{requested} results"
+  },
+  "addProspects": {
+    "title": "Add prospects",
+    "subtitleStart": "Manual entry for potential clients. Records also appear in ",
+    "clientProspectsLink": "Client prospects",
+    "loginPrefix": "Sign in",
+    "loginSuffix": "to save prospects in the cloud.",
+    "newProspect": "New prospect",
+    "editProspect": "Edit prospect",
+    "cancelEdit": "Cancel editing",
+    "destinationList": "Destination list",
+    "personalNoList": "Personal (no list)",
+    "listHelpStart": "You can create shared lists in ",
+    "prospectListsLink": "Prospect lists",
+    "name": "Name *",
+    "address": "Address",
+    "city": "City",
+    "country": "Country",
+    "phone": "Phone",
+    "email": "Email",
+    "website": "Website",
+    "detectedProblems": "Detected problems",
+    "opportunities": "Opportunities",
+    "status": "Status",
+    "createProspect": "Create prospect",
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "manualProspects": "Manual prospects",
+    "manualHelp": "Use the trash icon to permanently delete the record from the database.",
+    "nameRequired": "Name is required.",
+    "deleteConfirm": "Delete prospect “{name}” completely? This action cannot be undone.",
+    "editLabel": "Edit: {name}",
+    "createdTitle": "Prospect created",
+    "updatedTitle": "Prospect updated",
+    "createdMessage": "“{name}” was added to your prospects.",
+    "updatedMessage": "“{name}” was updated successfully.",
+    "emptyManual": "There are no manual prospects yet.",
+    "updateProspect": "Update",
+    "deleteTitle": "Delete this prospect permanently"
+  },
+  "clientProspects": {
+    "title": "Client prospects",
+    "description": "Unified list (personal and shared by list). Mark from search or add manually in Add prospects. Shared lists are created or selected when liking a search result. If you own a list, select it in the filter and use Share this list to invite your team.",
+    "searchLink": "search",
+    "addProspectsLink": "Add prospects",
+    "loginPrefix": "Sign in",
+    "loginSuffix": "to see your saved prospects.",
+    "filterByList": "Filter by list",
+    "all": "All",
+    "none": "No list (personal)",
+    "showingAll": "Showing all accessible",
+    "showingNone": "Only prospects without a list",
+    "showingList": "List: {name}",
+    "sharedWith": "Shared with ({count})",
+    "shareThisList": "Share this list",
+    "deleteTitle": "Delete this prospect permanently",
+    "deleteConfirm": "Delete “{name}” from client prospects completely? This action cannot be undone.",
+    "exportCategory": "Client prospects",
+    "exportLocation": "Exported list",
+    "empty": "No prospects yet. Mark them with the heart in search results or create them in Add prospects.",
+    "loading": "Loading…",
+    "filteredEmpty": "No prospects match this filter. Change the list in the selector above."
+  },
+  "searchHistory": {
+    "settings": "Settings",
+    "profile": "Profile",
+    "blacklist": "Blacklist",
+    "history": "History",
+    "new": "New",
+    "closeHistory": "Close search history",
+    "close": "Close",
+    "loginHint": "Sign in to save your searches here. Only searches you run appear here; folder shares open from Folders.",
+    "empty": "You have no searches yet. Click New and launch a search.",
+    "running": "in progress",
+    "deleteFromHistory": "Delete from history",
+    "delete": "Delete"
+  },
+  "markProspect": {
+    "chooseListError": "Choose a shared list or create a new one.",
+    "nameRequired": "Enter a name for the shared list.",
+    "createError": "The list could not be created.",
+    "close": "Close",
+    "title": "Save prospect",
+    "personal": "My personal list (only me)",
+    "existing": "Existing shared list",
+    "choose": "— Choose —",
+    "sharedSuffix": " (shared)",
+    "new": "New shared list (you can invite later)",
+    "newPlaceholder": "List name…",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "shareDialog": {
+    "invalidEmail": "Enter a valid email to send the invitation.",
+    "selfInvite": "You cannot invite yourself.",
+    "duplicate": "There is already a pending invitation for that email on this resource.",
+    "sentExisting": "Invitation sent. The user already has an account and will see a notification in the app. Once accepted, they will have shared access.",
+    "sentNew": "Invitation registered. That person is not on the platform yet: they must sign in with Google using exactly this email. When they do, they will see the invitation in the bell icon or in Shared.",
+    "close": "Close",
+    "title": "Share: {title}",
+    "description": "Enter the email and permission, then click Send invitation. If you prefer not to invite now, click Cancel.",
+    "email": "Guest email",
+    "permission": "Permission",
+    "viewer": "Read only",
+    "editor": "Can edit (add or remove items)",
+    "listHint": "With Read only they cannot save prospects to the list; choose Can edit if you want them to add businesses visible to the whole team.",
+    "sending": "Sending…",
+    "send": "Send invitation",
+    "cancel": "Cancel"
+  },
+  "addToFolder": {
+    "nameRequired": "Folder name is required.",
+    "createError": "The folder could not be created.",
+    "selectRequired": "Select a folder.",
+    "close": "Close",
+    "title": "Add to folder",
+    "description": "Shared search folder — save this list with others to work as a team.",
+    "existingFolder": "Existing folder",
+    "addSelected": "Add to selected folder",
+    "newFolder": "New folder",
+    "placeholder": "Folder name",
+    "createAndAdd": "Create folder and add this search",
+    "cancel": "Cancel"
+  },
+  "sharedMembers": {
+    "removeConfirm": "Stop sharing the “{listName}” list with {email}? They will lose access to the prospects in this list.",
+    "close": "Close",
+    "loading": "Loading members…",
+    "empty": "No one else has access to this list yet. Use Share this list to invite collaborators.",
+    "remove": "Remove access",
+    "title": "Shared with — {listName}"
+  },
+  "observations": {
+    "title": "Team observations",
+    "problems": "Detected problems",
+    "problemsPlaceholder": "What we noticed about the business: site down, no social media, no answer, does not accept cards, etc.",
+    "opportunities": "Opportunities",
+    "opportunitiesPlaceholder": "What we can offer: website redesign, local campaign, automations, etc.",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "unsaved": "Unsaved changes",
+    "error": "Error",
+    "readOnly": "Read only"
   }
 }

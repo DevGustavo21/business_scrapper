@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { History, Menu, X } from 'lucide-react'
 import { Link, usePathname } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
@@ -12,10 +13,10 @@ import { NotificationsPopover } from '@/components/NotificationsPopover'
 import { useSyncProfileLocale } from '@/hooks/useSyncProfileLocale'
 
 const links = [
-  { href: '/', label: 'Inicio' },
-  { href: '/carpetas', label: 'Carpetas' },
-  { href: '/agregar-prospectos', label: 'Agregar prospectos' },
-  { href: '/clientes-prospectos', label: 'Clientes prospectos' },
+  { href: '/', labelKey: 'home' },
+  { href: '/carpetas', labelKey: 'folders' },
+  { href: '/agregar-prospectos', labelKey: 'addProspects' },
+  { href: '/clientes-prospectos', labelKey: 'clientProspects' },
 ] as const
 
 export function AppHeader({
@@ -82,12 +83,14 @@ function HeaderInner({
   setMobileNavOpen: React.Dispatch<React.SetStateAction<boolean>>
   isActive: (href: string) => boolean
 }) {
+  const tHeader = useTranslations('appHeader')
+  const tNav = useTranslations('nav')
   return (
     <div className="max-w-[1600px] mx-auto px-3 min-[1200px]:px-6 h-14 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
-          aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú de navegación'}
+          aria-label={mobileNavOpen ? tHeader('closeMenu') : tHeader('openMenu')}
           aria-expanded={mobileNavOpen}
           className="min-[1200px]:hidden shrink-0 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
           onClick={() => setMobileNavOpen(v => !v)}
@@ -97,9 +100,9 @@ function HeaderInner({
         {showHistoryTrigger && (
           <button
             type="button"
-            aria-label={historyOpen ? 'Cerrar historial' : 'Abrir historial de búsquedas'}
+            aria-label={historyOpen ? tHeader('closeHistory') : tHeader('openHistory')}
             aria-expanded={historyOpen}
-            title="Historial de búsquedas"
+            title={tHeader('historyTitle')}
             onClick={onToggleHistory}
             className={cn(
               'shrink-0 p-2 rounded-lg border transition-colors',
@@ -115,7 +118,7 @@ function HeaderInner({
       </div>
 
       <nav className="hidden min-[1200px]:flex items-center gap-0.5" aria-label="Principal">
-        {links.map(({ href, label }) => (
+        {links.map(({ href, labelKey }) => (
           <Link
             key={href}
             href={href}
@@ -126,7 +129,7 @@ function HeaderInner({
                 : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800/80',
             )}
           >
-            {label}
+            {tNav(labelKey)}
           </Link>
         ))}
       </nav>
@@ -152,23 +155,25 @@ function MobileNavDrawer({
   onClose: () => void
   isActive: (href: string) => boolean
 }) {
+  const tHeader = useTranslations('appHeader')
+  const tNav = useTranslations('nav')
   return (
-    <div className="fixed inset-0 z-50 min-[1200px]:hidden" role="dialog" aria-modal="true" aria-label="Menú de navegación">
-      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" aria-label="Cerrar menú" onClick={onClose} />
+    <div className="fixed inset-0 z-50 min-[1200px]:hidden" role="dialog" aria-modal="true" aria-label={tHeader('menu')}>
+      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" aria-label={tHeader('closeMenu')} onClick={onClose} />
       <nav className="absolute top-0 left-0 bottom-0 w-[min(88vw,300px)] bg-white dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col">
         <div className="flex items-center justify-between px-4 h-14 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
-          <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Menú</span>
+          <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{tHeader('menu')}</span>
           <button
             type="button"
             onClick={onClose}
             className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            aria-label="Cerrar"
+            aria-label={tHeader('closeMenu')}
           >
             <X size={20} />
           </button>
         </div>
         <ul className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-          {links.map(({ href, label }) => (
+          {links.map(({ href, labelKey }) => (
             <li key={href}>
               <Link
                 href={href}
@@ -180,18 +185,18 @@ function MobileNavDrawer({
                     : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800',
                 )}
               >
-                {label}
+                {tNav(labelKey)}
               </Link>
             </li>
           ))}
         </ul>
         <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-neutral-500">Idioma</span>
+            <span className="text-xs text-neutral-500">{tHeader('language')}</span>
             <LocaleSwitcher />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-neutral-500">Tema</span>
+            <span className="text-xs text-neutral-500">{tHeader('theme')}</span>
             <ThemeToggle />
           </div>
         </div>

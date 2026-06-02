@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { AppHeader } from '@/components/AppHeader'
 import { ResultsTable } from '@/components/ResultsTable'
@@ -37,6 +38,8 @@ const emptyForm = {
 }
 
 export default function AgregarProspectosPage() {
+  const t = useTranslations('addProspects')
+  const tResults = useTranslations('resultsTable')
   const user = useSupabaseUser()
   const [rows, setRows] = useState<ClientProspectRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,7 +109,7 @@ export default function AgregarProspectosPage() {
     e.preventDefault()
     if (!user || !isSupabaseConfigured()) return
     if (!form.nombre.trim()) {
-      setError('El nombre es obligatorio.')
+      setError(t('nameRequired'))
       return
     }
     setSaving(true)
@@ -148,7 +151,7 @@ export default function AgregarProspectosPage() {
   }
 
   const requestDeleteRow = (row: NegocioFila) => {
-    if (!window.confirm(`¿Eliminar por completo el prospecto «${row.nombre}»? Esta acción no se puede deshacer.`)) return
+    if (!window.confirm(t('deleteConfirm', { name: row.nombre }))) return
     void handleDelete(row.id)
   }
 
@@ -186,11 +189,11 @@ export default function AgregarProspectosPage() {
       <AppHeader />
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100">Agregar prospectos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100">{t('title')}</h1>
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-            Alta manual de clientes potenciales. Los registros aparecen también en{' '}
+            {t('subtitleStart')}{' '}
             <Link href="/clientes-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
-              Clientes prospectos
+              {t('clientProspectsLink')}
             </Link>
             .
           </p>
@@ -199,9 +202,9 @@ export default function AgregarProspectosPage() {
         {!loggedIn && (
           <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
             <Link href="/login" className="font-semibold underline">
-              Inicia sesión
+              {t('loginPrefix')}
             </Link>{' '}
-            para guardar prospectos en la nube.
+            {t('loginSuffix')}
           </p>
         )}
 
@@ -211,7 +214,7 @@ export default function AgregarProspectosPage() {
         >
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-              {editingId ? 'Editar prospecto' : 'Nuevo prospecto'}
+              {editingId ? t('editProspect') : t('newProspect')}
             </h2>
             {editingId && (
               <button
@@ -219,20 +222,20 @@ export default function AgregarProspectosPage() {
                 onClick={resetForm}
                 className="text-xs font-medium text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
               >
-                Cancelar edición
+                {t('cancelEdit')}
               </button>
             )}
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Lista de destino
+              {t('destinationList')}
               <select
                 className={inputClass + ' mt-1'}
                 value={selectedListId ?? ''}
                 onChange={e => setSelectedListId(e.target.value || null)}
                 disabled={!loggedIn || saving}
               >
-                <option value="">Personal (sin lista)</option>
+                <option value="">{t('personalNoList')}</option>
                 {prospectLists.map(pl => (
                   <option key={pl.id} value={pl.id}>
                     {pl.name}
@@ -240,15 +243,15 @@ export default function AgregarProspectosPage() {
                 ))}
               </select>
               <span className="mt-1 block text-[11px] text-neutral-500 font-normal">
-                Puedes crear listas compartidas en{' '}
+                {t('listHelpStart')}{' '}
                 <Link href="/clientes-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
-                  Listas de prospectos
+                  {t('prospectListsLink')}
                 </Link>
                 .
               </span>
             </label>
             <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Nombre *
+              {t('name')}
               <input
                 className={inputClass + ' mt-1'}
                 value={form.nombre}
@@ -258,7 +261,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Dirección
+              {t('address')}
               <input
                 className={inputClass + ' mt-1'}
                 value={form.direccion}
@@ -267,7 +270,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Ciudad
+              {t('city')}
               <input
                 className={inputClass + ' mt-1'}
                 value={form.ciudad}
@@ -276,7 +279,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              País
+              {t('country')}
               <input
                 className={inputClass + ' mt-1'}
                 value={form.pais}
@@ -285,7 +288,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Teléfono
+              {t('phone')}
               <input
                 className={inputClass + ' mt-1'}
                 value={form.telefono}
@@ -294,7 +297,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Correo
+              {t('email')}
               <input
                 className={inputClass + ' mt-1'}
                 type="email"
@@ -304,7 +307,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Sitio web
+              {t('website')}
               <input
                 className={inputClass + ' mt-1'}
                 value={form.sitioWeb}
@@ -313,7 +316,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Problemas detectados
+              {t('detectedProblems')}
               <textarea
                 className={inputClass + ' mt-1 min-h-[72px]'}
                 value={form.problemasDetectados}
@@ -322,7 +325,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="sm:col-span-2 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Oportunidades
+              {t('opportunities')}
               <textarea
                 className={inputClass + ' mt-1 min-h-[72px]'}
                 value={form.oportunidades}
@@ -331,7 +334,7 @@ export default function AgregarProspectosPage() {
               />
             </label>
             <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Estado
+              {t('status')}
               <select
                 className={inputClass + ' mt-1 cursor-pointer'}
                 value={form.estado}
@@ -340,7 +343,7 @@ export default function AgregarProspectosPage() {
               >
                 {CONTACTO_ESTADOS.map(s => (
                   <option key={s} value={s}>
-                    {s}
+                    {tResults(`statuses.${s}`)}
                   </option>
                 ))}
               </select>
@@ -352,15 +355,15 @@ export default function AgregarProspectosPage() {
               disabled={!loggedIn || saving}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
             >
-              {saving ? 'Guardando…' : editingId ? 'Actualizar' : 'Crear prospecto'}
+              {saving ? t('saving') : editingId ? t('updateProspect') : t('createProspect')}
             </button>
           </div>
         </form>
 
         <div>
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">Prospectos manuales</h2>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('manualProspects')}</h2>
           <p className="text-xs text-neutral-500 mb-3">
-            Usa la papelera para borrar el registro por completo de la base de datos.
+            {t('manualHelp')}
           </p>
           <ResultsTable
             negocios={negocios}
@@ -372,14 +375,14 @@ export default function AgregarProspectosPage() {
                 ? {
                     enabled: true,
                     disabled: loading,
-                    title: 'Eliminar este prospecto de forma permanente',
+                    title: t('deleteTitle'),
                     onDelete: requestDeleteRow,
                   }
                 : undefined
             }
           />
           {!loading && loggedIn && rows.length === 0 && (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Aún no hay prospectos manuales.</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('emptyManual')}</p>
           )}
         </div>
 
@@ -392,7 +395,7 @@ export default function AgregarProspectosPage() {
                 onClick={() => startEdit(r)}
                 className="text-xs px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               >
-                Editar: {r.nombre.slice(0, 28)}
+                {t('editLabel', { name: r.nombre.slice(0, 28) })}
                 {r.nombre.length > 28 ? '…' : ''}
               </button>
             ))}
@@ -403,12 +406,12 @@ export default function AgregarProspectosPage() {
       {error && <Toast message={error} onClose={() => setError(null)} />}
       <SimpleInfoModal
         open={successModal !== null}
-        title={successModal?.kind === 'created' ? 'Prospecto creado' : 'Prospecto actualizado'}
+        title={successModal?.kind === 'created' ? t('createdTitle') : t('updatedTitle')}
         message={
           successModal
             ? successModal.kind === 'created'
-              ? `Se guardó correctamente «${successModal.nombre}». Ya aparece en esta tabla y en Clientes prospectos.`
-              : `Los cambios de «${successModal.nombre}» se guardaron correctamente.`
+              ? t('createdMessage', { name: successModal.nombre })
+              : t('updatedMessage', { name: successModal.nombre })
             : ''
         }
         onClose={() => setSuccessModal(null)}

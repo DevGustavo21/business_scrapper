@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FolderOpen, Share2, Trash2 } from 'lucide-react'
@@ -23,6 +24,7 @@ import type { SearchFolderRow } from '@/types/collaboration'
 import type { ProspectSearchListItem } from '@/types/prospect-search'
 
 function CarpetasPageInner() {
+  const t = useTranslations('folders')
   const user = useSupabaseUser()
   const searchParams = useSearchParams()
   const folderParam = searchParams.get('folder')
@@ -122,7 +124,7 @@ function CarpetasPageInner() {
     if (!user || !newFolderName.trim()) return
     const sb = createBrowserSupabaseClient()
     const { folder, error: err } = await createSearchFolder(sb, user.id, newFolderName.trim())
-    if (err || !folder) setError(err?.message ?? 'Error')
+    if (err || !folder) setError(err?.message ?? t('genericError'))
     else {
       setNewFolderName('')
       await loadFolders()
@@ -143,7 +145,7 @@ function CarpetasPageInner() {
 
   const handleDeleteFolder = async () => {
     if (!selectedId || !isOwner) return
-    if (!window.confirm('¿Eliminar esta carpeta y sus vínculos a búsquedas? Las búsquedas en sí no se borran.')) return
+    if (!window.confirm(t('deleteConfirm'))) return
     const sb = createBrowserSupabaseClient()
     const { error: err } = await deleteSearchFolder(sb, selectedId)
     if (err) setError(err.message)
@@ -173,36 +175,35 @@ function CarpetasPageInner() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
               <FolderOpen className="text-indigo-600" />
-              Carpetas de búsquedas
+              {t('title')}
             </h1>
             <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400 max-w-2xl">
-              Agrupa búsquedas del historial y comparte la carpeta por correo. Las búsquedas siguen en tu cuenta; los
-              invitados las ven en contexto compartido.
+              {t('subtitle')}
             </p>
           </div>
           <Link href="/" className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline shrink-0">
-            ← Volver a búsqueda
+            {t('back')}
           </Link>
         </div>
 
         {!loggedIn && (
           <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
             <Link href="/login" className="font-semibold underline">
-              Inicia sesión
+              {t('loginPrefix')}
             </Link>{' '}
-            para usar carpetas compartidas.
+            {t('loginSuffix')}
           </p>
         )}
 
         {loggedIn && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[420px]">
             <section className="lg:col-span-4 flex flex-col gap-3 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-neutral-50/50 dark:bg-neutral-950/40">
-              <span className="text-xs font-semibold uppercase text-neutral-500">Tus carpetas</span>
+              <span className="text-xs font-semibold uppercase text-neutral-500">{t('yourFolders')}</span>
               <div className="flex gap-2">
                 <input
                   value={newFolderName}
                   onChange={e => setNewFolderName(e.target.value)}
-                  placeholder="Nueva carpeta…"
+                  placeholder={t('newPlaceholder')}
                   className="flex-1 min-w-0 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-3 py-2 text-sm"
                 />
                 <button
@@ -211,13 +212,13 @@ function CarpetasPageInner() {
                   disabled={loading || !newFolderName.trim()}
                   className="shrink-0 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-40"
                 >
-                  Crear
+                  {t('create')}
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto max-h-[360px] flex flex-col gap-1 pr-1">
-                {loading && <p className="text-xs text-neutral-500">Cargando…</p>}
+                {loading && <p className="text-xs text-neutral-500">{t('loading')}</p>}
                 {!loading && folders.length === 0 && (
-                  <p className="text-xs text-neutral-500">Crea una carpeta y desde Inicio añade búsquedas.</p>
+                  <p className="text-xs text-neutral-500">{t('emptyFolders')}</p>
                 )}
                 {folders.map(f => {
                   const active = f.id === selectedId
@@ -234,7 +235,7 @@ function CarpetasPageInner() {
                       }`}
                     >
                       <span className="font-medium line-clamp-2">{f.name}</span>
-                      <span className="block text-[10px] text-neutral-500">{mine ? 'Propietario' : 'Compartida'}</span>
+                      <span className="block text-[10px] text-neutral-500">{mine ? t('owner') : t('shared')}</span>
                     </button>
                   )
                 })}
@@ -242,12 +243,12 @@ function CarpetasPageInner() {
             </section>
 
             <section className="lg:col-span-8 flex flex-col gap-4 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 min-h-[320px]">
-              {!selected && <p className="text-sm text-neutral-500">Selecciona una carpeta.</p>}
+              {!selected && <p className="text-sm text-neutral-500">{t('selectFolder')}</p>}
               {selected && (
                 <>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="flex-1 min-w-0 flex flex-col gap-2">
-                      <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Nombre</label>
+                      <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{t('name')}</label>
                       <div className="flex gap-2">
                         <input
                           value={rename}
@@ -261,7 +262,7 @@ function CarpetasPageInner() {
                             onClick={handleRename}
                             className="px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm"
                           >
-                            Guardar
+                            {t('save')}
                           </button>
                         )}
                       </div>
@@ -274,7 +275,7 @@ function CarpetasPageInner() {
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium"
                       >
                         <Share2 size={16} />
-                        Compartir
+                        {t('share')}
                       </button>
                       )}
                       {isOwner && (
@@ -284,15 +285,15 @@ function CarpetasPageInner() {
                           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-sm"
                         >
                           <Trash2 size={16} />
-                          Eliminar
+                          {t('delete')}
                         </button>
                       )}
                     </div>
                   </div>
 
                   <div>
-                    <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">Búsquedas en la carpeta</h2>
-                    {searches.length === 0 && <p className="text-xs text-neutral-500">Aún no hay búsquedas vinculadas.</p>}
+                    <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">{t('searchesInFolder')}</h2>
+                    {searches.length === 0 && <p className="text-xs text-neutral-500">{t('emptySearches')}</p>}
                     <ul className="flex flex-col gap-2">
                       {searches.map(s => (
                         <li
@@ -307,13 +308,13 @@ function CarpetasPageInner() {
                               {s.categoria} · {s.ubicacion}
                             </Link>
                             <span className="block text-[10px] text-neutral-500">
-                              {s.result_count}/{s.cantidad_solicitada} resultados
+                              {t('resultCount', { count: s.result_count, requested: s.cantidad_solicitada })}
                             </span>
                           </div>
                           {canEditFolderItems && (
                             <button
                               type="button"
-                              title="Quitar de la carpeta"
+                          title={t('remove')}
                               className="shrink-0 p-2 text-neutral-400 hover:text-red-600"
                               onClick={() => void handleRemoveSearch(s.id)}
                             >
@@ -352,7 +353,7 @@ export default function CarpetasPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500">Cargando carpetas…</div>
+        <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500">Loading…</div>
       }
     >
       <CarpetasPageInner />

@@ -1,6 +1,7 @@
 'use client'
 
 import { Plus, MessageSquare, Trash2, Settings, ChevronRight, X } from 'lucide-react'
+import { useLocale, useTranslations } from 'next-intl'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
@@ -20,16 +21,17 @@ export function writeStoredActiveSearchId(id: string | null) {
   else sessionStorage.removeItem(ACTIVE_KEY)
 }
 
-function formatWhen(iso: string): string {
+function formatWhen(iso: string, locale: string): string {
   try {
     const d = new Date(iso)
-    return d.toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })
+    return d.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' })
   } catch {
     return ''
   }
 }
 
 export function SearchHistoryConfigFooter() {
+  const t = useTranslations('searchHistory')
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -53,7 +55,7 @@ export function SearchHistoryConfigFooter() {
       >
         <span className="inline-flex items-center gap-2 min-w-0">
           <Settings size={16} className="shrink-0 text-neutral-500 dark:text-neutral-400" aria-hidden />
-          Configuración
+          {t('settings')}
         </span>
         <ChevronRight
           size={16}
@@ -71,7 +73,7 @@ export function SearchHistoryConfigFooter() {
             role="menuitem"
             onClick={() => setOpen(false)}
           >
-            Perfil
+            {t('profile')}
           </Link>
           <Link
             href="/settings/lista-negra"
@@ -79,7 +81,7 @@ export function SearchHistoryConfigFooter() {
             role="menuitem"
             onClick={() => setOpen(false)}
           >
-            Lista negra
+            {t('blacklist')}
           </Link>
         </div>
       )}
@@ -113,6 +115,8 @@ export function SearchHistorySidebar({
   className?: string
   sidebarFooter?: ReactNode
 }) {
+  const t = useTranslations('searchHistory')
+  const locale = useLocale()
   return (
     <aside
       className={cn(
@@ -122,7 +126,7 @@ export function SearchHistorySidebar({
     >
       <div className="p-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          Historial
+          {t('history')}
         </span>
         <div className="flex items-center gap-1.5">
           <button
@@ -132,14 +136,14 @@ export function SearchHistorySidebar({
             className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus size={14} />
-            Nueva
+            {t('new')}
           </button>
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              aria-label="Cerrar historial"
-              title="Cerrar"
+              aria-label={t('closeHistory')}
+              title={t('close')}
               className="shrink-0 p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800/80"
             >
               <X size={16} />
@@ -150,13 +154,12 @@ export function SearchHistorySidebar({
       <div className={`flex-1 overflow-y-auto p-2 ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
         {!loggedIn && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400 px-2 py-3 leading-relaxed">
-            Inicia sesión para guardar tus búsquedas aquí. Solo aparecen las que tú ejecutas; las compartidas por carpetas se
-            abren desde <strong>Carpetas</strong>.
+            {t('loginHint')}
           </p>
         )}
         {loggedIn && items.length === 0 && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400 px-2 py-3">
-            Aún no hay búsquedas tuyas. Pulsa <strong>Nueva</strong> y lanza una búsqueda.
+            {t('empty')}
           </p>
         )}
         <ul className="flex flex-col gap-1">
@@ -183,16 +186,16 @@ export function SearchHistorySidebar({
                       <span className="min-w-0 flex-1">
                         <span className="line-clamp-2 font-medium text-neutral-900 dark:text-neutral-100">{label}</span>
                         <span className="mt-0.5 block text-[11px] text-neutral-500 dark:text-neutral-500">
-                          {formatWhen(item.updated_at)} · {item.result_count}/{item.cantidad_solicitada}
-                          {item.status === 'running' ? ' · en curso' : ''}
+                          {formatWhen(item.updated_at, locale)} · {item.result_count}/{item.cantidad_solicitada}
+                          {item.status === 'running' ? ` · ${t('running')}` : ''}
                         </span>
                       </span>
                     </span>
                   </button>
                   <button
                     type="button"
-                    aria-label="Eliminar del historial"
-                    title="Eliminar"
+                    aria-label={t('deleteFromHistory')}
+                    title={t('delete')}
                     disabled={loading || disabled}
                     onClick={e => {
                       e.stopPropagation()

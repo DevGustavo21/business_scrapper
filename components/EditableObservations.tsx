@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { Check, Loader2, AlertCircle } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -27,6 +28,7 @@ type Props = {
  * Pensado para que el equipo deje observaciones manuales sobre un negocio.
  */
 export function EditableObservations({ value, disabled = false, onSave, disabledHint }: Props) {
+  const t = useTranslations('observations')
   const [problemas, setProblemas] = useState(value.problemasDetectados)
   const [oportunidades, setOportunidades] = useState(value.oportunidades)
   const [status, setStatus] = useState<SaveStatus>('idle')
@@ -93,14 +95,14 @@ export function EditableObservations({ value, disabled = false, onSave, disabled
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          Observaciones del equipo
+          {t('title')}
         </h2>
         <StatusBadge status={status} disabled={disabled} disabledHint={disabledHint} errorMsg={errorMsg} />
       </div>
 
       <Field
-        label="Problemas detectados"
-        placeholder="Qué hemos notado del negocio: sitio caído, sin redes, no contestan, no aceptan tarjeta, etc."
+        label={t('problems')}
+        placeholder={t('problemsPlaceholder')}
         value={problemas}
         disabled={disabled}
         onChange={v => {
@@ -114,8 +116,8 @@ export function EditableObservations({ value, disabled = false, onSave, disabled
       />
 
       <Field
-        label="Oportunidades"
-        placeholder="Qué podemos ofrecer: rediseño web, campaña local, automatizaciones, etc."
+        label={t('opportunities')}
+        placeholder={t('opportunitiesPlaceholder')}
         value={oportunidades}
         disabled={disabled}
         onChange={v => {
@@ -173,10 +175,11 @@ function StatusBadge({
   disabledHint?: string
   errorMsg: string | null
 }) {
+  const t = useTranslations('observations')
   if (disabled) {
     return (
       <span className="text-[11px] text-neutral-500 dark:text-neutral-500">
-        {disabledHint ?? 'Solo lectura'}
+        {disabledHint ?? t('readOnly')}
       </span>
     )
   }
@@ -184,7 +187,7 @@ function StatusBadge({
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
         <Loader2 size={12} className="animate-spin" />
-        {status === 'saving' ? 'Guardando…' : 'Pendiente'}
+        {status === 'saving' ? t('saving') : t('unsaved')}
       </span>
     )
   }
@@ -192,18 +195,18 @@ function StatusBadge({
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
         <Check size={12} />
-        Guardado
+        {t('saved')}
       </span>
     )
   }
   if (status === 'error') {
     return (
       <span
-        title={errorMsg ?? 'Error al guardar'}
+        title={errorMsg ?? t('error')}
         className="inline-flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400"
       >
         <AlertCircle size={12} />
-        Error al guardar
+        {t('error')}
       </span>
     )
   }

@@ -60,10 +60,30 @@
       "tableCity": "Ciudad",
       "tableStatus": "Estado",
       "rows": {
-        "first": { "name": "Clínica Dental Sonrisa", "city": "Madrid · ES", "phone": "+34 91 234 5678", "status": "Interesado" },
-        "second": { "name": "Dentamed Centro Dental", "city": "Madrid · ES", "phone": "+34 91 555 0123", "status": "Contactado" },
-        "third": { "name": "Ortodoncia Premium", "city": "Madrid · ES", "phone": "+34 91 877 4421", "status": "Pendiente" },
-        "fourth": { "name": "Estética Dental Salamanca", "city": "Madrid · ES", "phone": "+34 91 902 3344", "status": "Cliente" }
+        "first": {
+          "name": "Clínica Dental Sonrisa",
+          "city": "Madrid · ES",
+          "phone": "+34 91 234 5678",
+          "status": "Interesado"
+        },
+        "second": {
+          "name": "Dentamed Centro Dental",
+          "city": "Madrid · ES",
+          "phone": "+34 91 555 0123",
+          "status": "Contactado"
+        },
+        "third": {
+          "name": "Ortodoncia Premium",
+          "city": "Madrid · ES",
+          "phone": "+34 91 877 4421",
+          "status": "Pendiente"
+        },
+        "fourth": {
+          "name": "Estética Dental Salamanca",
+          "city": "Madrid · ES",
+          "phone": "+34 91 902 3344",
+          "status": "Cliente"
+        }
       },
       "liveStatus": "Extracción en vivo · 4/12 negocios",
       "exportLabel": "Exportar a Excel"
@@ -89,9 +109,18 @@
         }
       },
       "stats": {
-        "first": { "value": "98%", "label": "de búsquedas completadas con datos limpios y deduplicados" },
-        "second": { "value": "7,2k+", "label": "negocios extraídos al mes por los equipos activos" },
-        "third": { "value": "<1 min", "label": "tiempo medio de una búsqueda end-to-end" }
+        "first": {
+          "value": "98%",
+          "label": "de búsquedas completadas con datos limpios y deduplicados"
+        },
+        "second": {
+          "value": "7,2k+",
+          "label": "negocios extraídos al mes por los equipos activos"
+        },
+        "third": {
+          "value": "<1 min",
+          "label": "tiempo medio de una búsqueda end-to-end"
+        }
       }
     },
     "missions": {
@@ -150,10 +179,22 @@
         "fourth": "Antojería Casa Pepa · Coyoacán"
       },
       "foldersPreview": {
-        "first": { "name": "Campaña Q3", "searches": "{count} búsquedas" },
-        "second": { "name": "CDMX", "searches": "{count} búsquedas" },
-        "third": { "name": "Madrid", "searches": "{count} búsquedas" },
-        "fourth": { "name": "Compartido", "searches": "{count} búsquedas" }
+        "first": {
+          "name": "Campaña Q3",
+          "searches": "{count} búsquedas"
+        },
+        "second": {
+          "name": "CDMX",
+          "searches": "{count} búsquedas"
+        },
+        "third": {
+          "name": "Madrid",
+          "searches": "{count} búsquedas"
+        },
+        "fourth": {
+          "name": "Compartido",
+          "searches": "{count} búsquedas"
+        }
       }
     },
     "steps": {
@@ -356,5 +397,286 @@
       "ctaSecondary": "Volver al inicio"
     },
     "footerNote": "© {year} Business Prospector · Precios sujetos a cambios sin previo aviso"
+  },
+  "brand": {
+    "tagline": "AI scraping suite"
+  },
+  "appHeader": {
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú",
+    "menu": "Menú",
+    "language": "Idioma",
+    "theme": "Tema",
+    "openHistory": "Abrir historial de búsquedas",
+    "closeHistory": "Cerrar historial",
+    "historyTitle": "Historial de búsquedas"
+  },
+  "authNav": {
+    "signIn": "Iniciar sesión",
+    "greeting": "Hola, {name}",
+    "settings": "Configuración",
+    "logout": "Cerrar sesión",
+    "logoutTitle": "¿Cerrar sesión?",
+    "logoutMessage": "¿Seguro que quieres cerrar sesión? Tendrás que volver a iniciar sesión para acceder a tus prospectos y listas.",
+    "logoutConfirm": "Sí, cerrar sesión"
+  },
+  "dashboard": {
+    "heroTitle": "Prospecta negocios en segundos",
+    "heroSubtitle": "Cada búsqueda tuya queda en el historial lateral (con sesión iniciada). Lo que comparte un compañero en una carpeta se abre en una vista aparte, no mezclada con tu historial.",
+    "loginPrefix": "Inicia sesión",
+    "loginSuffix": "para guardar tus búsquedas, historial y marcas de prospectos.",
+    "prospectHint": "Al marcar con el corazón elige si va a tu lista personal o a una lista compartida (nueva o existente).",
+    "shareSearch": "Compartir búsqueda",
+    "addToFolder": "Añadir a carpeta",
+    "deleteRowTitle": "Eliminar esta fila de la búsqueda",
+    "sharedListFallback": "Lista compartida",
+    "deleteSearchTitle": "Eliminar búsqueda del historial",
+    "deleteSearchMessage": "Se eliminará «{label}» del historial. Esta acción no se puede deshacer.",
+    "deleteBusinessTitle": "Eliminar negocio",
+    "deleteBusinessMessage": "Se quitará «{name}» de los resultados y de la búsqueda guardada. Si estaba marcado como prospecto, también se borrará de Clientes prospectos.",
+    "footer": "Uso personal — extrae datos públicos disponibles en internet",
+    "loading": "Cargando…",
+    "loadSearchError": "No se pudo cargar la búsqueda.",
+    "loadingSources": "Fuentes: Google Maps y, si hace falta, Páginas Amarillas. Las filas se van sumando al vuelo; la extracción completa puede tardar hasta unos 4 minutos. Cuando ya veas datos en la tabla, la búsqueda sigue en segundo plano hasta que el botón vuelva a «Buscar».",
+    "signInToMark": "Inicia sesión para marcar prospectos."
+  },
+  "searchPanel": {
+    "categoryLabel": "Categoría del negocio",
+    "categoryPlaceholder": "Ej: dentistas, restaurantes, gimnasios…",
+    "locationLabel": "Ubicación de la búsqueda",
+    "locationPlaceholder": "Ej: Madrid, España · Florida, Estados Unidos · Managua, Nicaragua",
+    "locationHelp": "Empieza a escribir un país, estado o ciudad y elige una sugerencia para mejores resultados. También puedes escribir libremente.",
+    "quantityLabel": "Cantidad de resultados",
+    "businessesOption": "{count} negocios",
+    "search": "Buscar",
+    "searching": "Buscando…"
+  },
+  "resultsTable": {
+    "columns": {
+      "name": "Nombre",
+      "address": "Dirección",
+      "city": "Ciudad",
+      "country": "País",
+      "phone": "Teléfono",
+      "email": "Correo",
+      "website": "Sitio web",
+      "origin": "Origen",
+      "prospect": "¿Prospecto?",
+      "status": "Estado",
+      "delete": "Eliminar"
+    },
+    "originManual": "Manual",
+    "originSearch": "Búsqueda",
+    "records": "{count, plural, one {registro} other {registros}}",
+    "businessesFound": "{count, plural, one {negocio encontrado} other {negocios encontrados}}",
+    "upToRequested": " / hasta {requested} solicitados",
+    "connecting": " · conectando con el servidor…",
+    "streaming": " · sigue extrayendo en segundo plano (puede tardar varios minutos más; ya puedes usar la tabla y exportar).",
+    "loading": "Cargando…",
+    "extracting": "Extrayendo…",
+    "serverStreaming": "El servidor sigue enviando negocios; las filas aparecerán aquí conforme lleguen…",
+    "removeFromClientProspects": "Quitar de clientes prospectos",
+    "removeFromProspects": "Quitar de prospectos",
+    "markAsProspect": "Marcar como prospecto",
+    "deleteFullRow": "Eliminar esta fila por completo",
+    "deleteRow": "Eliminar fila",
+    "statuses": {
+      "Sin contactar": "Sin contactar",
+      "Contactado": "Contactado",
+      "Interesado": "Interesado",
+      "No interesado": "No interesado",
+      "Cliente": "Cliente"
+    }
+  },
+  "exportButton": {
+    "label": "Exportar a Excel"
+  },
+  "searchComplete": {
+    "close": "Cerrar",
+    "ok": "Entendido",
+    "query": "Consulta:",
+    "finished": "Búsqueda finalizada",
+    "emptyTitle": "Búsqueda finalizada sin resultados",
+    "emptyDetail": "No se pudo extraer ningún negocio con los criterios indicados. Puedes probar otra categoría, ampliar la zona o comprobar la conexión.",
+    "completedTitle": "Búsqueda completada",
+    "completedDetail": "Se alcanzó el objetivo: {total} {businesses} (pedidos: {requested}). Ya puedes revisar la tabla y exportar a Excel si lo necesitas.",
+    "timeoutTitle": "Búsqueda finalizada por tiempo",
+    "timeoutPartialDetail": "El tiempo máximo de extracción se agotó antes de llegar a {requested} negocios. Se guardaron {total} {results}; puedes exportarlos o lanzar otra búsqueda.",
+    "timeoutCoveredDetail": "Se obtuvieron {total} {businesses} (solicitados: {requested}). La búsqueda cerró por límite de tiempo con la cuota cubierta.",
+    "fallbackDetail": "Resultado: {total} {businesses} de {requested} solicitados. Motivo de cierre: {reason}.",
+    "businessSingular": "negocio",
+    "businessPlural": "negocios",
+    "resultSingular": "resultado",
+    "resultPlural": "resultados",
+    "reasonTargetMet": "objetivo alcanzado",
+    "reasonTimeout": "tiempo máximo"
+  },
+  "folders": {
+    "title": "Carpetas de búsquedas",
+    "subtitle": "Agrupa búsquedas del historial y comparte la carpeta por correo. Las búsquedas siguen en tu cuenta; los invitados las ven en contexto compartido.",
+    "back": "← Volver a búsqueda",
+    "loginPrefix": "Inicia sesión",
+    "loginSuffix": "para usar carpetas compartidas.",
+    "yourFolders": "Tus carpetas",
+    "newPlaceholder": "Nueva carpeta…",
+    "create": "Crear",
+    "loading": "Cargando…",
+    "emptyFolders": "Crea una carpeta y desde Inicio añade búsquedas.",
+    "owner": "Propietario",
+    "shared": "Compartida",
+    "selectFolder": "Selecciona una carpeta.",
+    "name": "Nombre",
+    "save": "Guardar",
+    "share": "Compartir",
+    "delete": "Eliminar",
+    "searchesInFolder": "Búsquedas en la carpeta",
+    "emptySearches": "Aún no hay búsquedas vinculadas.",
+    "remove": "Quitar",
+    "deleteConfirm": "¿Eliminar esta carpeta y sus vínculos a búsquedas? Las búsquedas en sí no se borran.",
+    "genericError": "Error",
+    "resultCount": "{count}/{requested} resultados"
+  },
+  "addProspects": {
+    "title": "Agregar prospectos",
+    "subtitleStart": "Alta manual de clientes potenciales. Los registros aparecen también en ",
+    "clientProspectsLink": "Clientes prospectos",
+    "loginPrefix": "Inicia sesión",
+    "loginSuffix": "para guardar prospectos en la nube.",
+    "newProspect": "Nuevo prospecto",
+    "editProspect": "Editar prospecto",
+    "cancelEdit": "Cancelar edición",
+    "destinationList": "Lista de destino",
+    "personalNoList": "Personal (sin lista)",
+    "listHelpStart": "Puedes crear listas compartidas en ",
+    "prospectListsLink": "Listas de prospectos",
+    "name": "Nombre *",
+    "address": "Dirección",
+    "city": "Ciudad",
+    "country": "País",
+    "phone": "Teléfono",
+    "email": "Correo",
+    "website": "Sitio web",
+    "detectedProblems": "Problemas detectados",
+    "opportunities": "Oportunidades",
+    "status": "Estado",
+    "createProspect": "Crear prospecto",
+    "saveChanges": "Guardar cambios",
+    "saving": "Guardando…",
+    "manualProspects": "Prospectos manuales",
+    "manualHelp": "Usa la papelera para borrar el registro por completo de la base de datos.",
+    "nameRequired": "El nombre es obligatorio.",
+    "deleteConfirm": "¿Eliminar por completo el prospecto «{name}»? Esta acción no se puede deshacer.",
+    "editLabel": "Editar: {name}",
+    "createdTitle": "Prospecto creado",
+    "updatedTitle": "Prospecto actualizado",
+    "createdMessage": "«{name}» fue agregado a tus prospectos.",
+    "updatedMessage": "«{name}» se actualizó correctamente.",
+    "emptyManual": "Aún no hay prospectos manuales.",
+    "updateProspect": "Actualizar",
+    "deleteTitle": "Eliminar este prospecto de forma permanente"
+  },
+  "clientProspects": {
+    "title": "Clientes prospectos",
+    "description": "Listado unificado (personales y compartidos por lista). Marca desde la búsqueda o alta en Agregar prospectos. Las listas compartidas se crean o eligen al dar «me gusta» a un resultado en la búsqueda. Si eres dueño de una lista, selecciónala en el filtro y usa Compartir esta lista para invitar a tu equipo.",
+    "searchLink": "búsqueda",
+    "addProspectsLink": "Agregar prospectos",
+    "loginPrefix": "Inicia sesión",
+    "loginSuffix": "para ver tus prospectos guardados.",
+    "filterByList": "Filtrar por lista",
+    "all": "Todas",
+    "none": "Sin lista (personal)",
+    "showingAll": "Mostrando todos los accesibles",
+    "showingNone": "Solo prospectos sin lista",
+    "showingList": "Lista: {name}",
+    "sharedWith": "Compartido con ({count})",
+    "shareThisList": "Compartir esta lista",
+    "deleteTitle": "Eliminar este prospecto de forma permanente",
+    "deleteConfirm": "¿Eliminar por completo «{name}» de clientes prospectos? Esta acción no se puede deshacer.",
+    "exportCategory": "Clientes prospectos",
+    "exportLocation": "Lista exportada",
+    "empty": "Aún no hay prospectos. Márcalos con el corazón en los resultados de una búsqueda o créalos en Agregar prospectos.",
+    "loading": "Cargando…",
+    "filteredEmpty": "No hay prospectos con este filtro. Cambia la lista en el selector superior."
+  },
+  "searchHistory": {
+    "settings": "Configuración",
+    "profile": "Perfil",
+    "blacklist": "Lista negra",
+    "history": "Historial",
+    "new": "Nueva",
+    "closeHistory": "Cerrar historial",
+    "close": "Cerrar",
+    "loginHint": "Inicia sesión para guardar tus búsquedas aquí. Solo aparecen las que tú ejecutas; las compartidas por carpetas se abren desde Carpetas.",
+    "empty": "Aún no hay búsquedas tuyas. Pulsa Nueva y lanza una búsqueda.",
+    "running": "en curso",
+    "deleteFromHistory": "Eliminar del historial",
+    "delete": "Eliminar"
+  },
+  "markProspect": {
+    "chooseListError": "Elige una lista compartida o crea una nueva.",
+    "nameRequired": "Escribe un nombre para la lista compartida.",
+    "createError": "No se pudo crear la lista.",
+    "close": "Cerrar",
+    "title": "Guardar prospecto",
+    "personal": "Mi lista personal (solo yo)",
+    "existing": "Lista compartida existente",
+    "choose": "— Elige —",
+    "sharedSuffix": " (compartida)",
+    "new": "Nueva lista compartida (luego podrás invitar)",
+    "newPlaceholder": "Nombre de la lista…",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "shareDialog": {
+    "invalidEmail": "Escribe un correo válido para enviar la invitación.",
+    "selfInvite": "No puedes invitarte a ti mismo.",
+    "duplicate": "Ya existe una invitación pendiente para ese correo en este recurso.",
+    "sentExisting": "Invitación enviada. El usuario ya tiene cuenta y verá una notificación en la app. Cuando acepte, tendrá acceso compartido.",
+    "sentNew": "Invitación registrada. Esa persona aún no aparece en la plataforma: debe iniciar sesión con Google usando exactamente este correo. Al hacerlo, verá la invitación en el icono de campana o en «Compartido».",
+    "close": "Cerrar",
+    "title": "Compartir: {title}",
+    "description": "Introduce el correo y el permiso, luego pulsa Enviar invitación. Si prefieres no invitar ahora, pulsa Cancelar.",
+    "email": "Correo del invitado",
+    "permission": "Permiso",
+    "viewer": "Solo lectura",
+    "editor": "Puede editar (añadir o quitar ítems)",
+    "listHint": "Con Solo lectura no pueden guardar prospectos en la lista; elige Puede editar si quieres que añadan negocios visibles para todo el equipo.",
+    "sending": "Enviando…",
+    "send": "Enviar invitación",
+    "cancel": "Cancelar"
+  },
+  "addToFolder": {
+    "nameRequired": "El nombre de la carpeta es obligatorio.",
+    "createError": "No se pudo crear la carpeta.",
+    "selectRequired": "Selecciona una carpeta.",
+    "close": "Cerrar",
+    "title": "Añadir a carpeta",
+    "description": "Carpeta compartida de búsquedas — guarda esta lista junto con otras para trabajar en equipo.",
+    "existingFolder": "Carpeta existente",
+    "addSelected": "Añadir a carpeta seleccionada",
+    "newFolder": "Nueva carpeta",
+    "placeholder": "Nombre de la carpeta",
+    "createAndAdd": "Crear carpeta y añadir esta búsqueda",
+    "cancel": "Cancelar"
+  },
+  "sharedMembers": {
+    "removeConfirm": "¿Dejar de compartir la lista «{listName}» con {email}? Perderá el acceso a los prospectos de esta lista.",
+    "close": "Cerrar",
+    "loading": "Cargando miembros…",
+    "empty": "Nadie más tiene acceso a esta lista todavía. Usa «Compartir esta lista» para invitar colaboradores.",
+    "remove": "Quitar acceso",
+    "title": "Compartido con — {listName}"
+  },
+  "observations": {
+    "title": "Observaciones del equipo",
+    "problems": "Problemas detectados",
+    "problemsPlaceholder": "Qué hemos notado del negocio: sitio caído, sin redes, no contestan, no aceptan tarjeta, etc.",
+    "opportunities": "Oportunidades",
+    "opportunitiesPlaceholder": "Qué podemos ofrecer: rediseño web, campaña local, automatizaciones, etc.",
+    "saved": "Guardado",
+    "saving": "Guardando…",
+    "unsaved": "Cambios sin guardar",
+    "error": "Error",
+    "readOnly": "Solo lectura"
   }
 }

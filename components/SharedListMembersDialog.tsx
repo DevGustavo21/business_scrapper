@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { X } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import {
@@ -63,6 +64,7 @@ export function SharedListMembersDialog({
   listName: string
   ownerId: string
 }) {
+  const t = useTranslations('sharedMembers')
   const [members, setMembers] = useState<ProspectListMemberRow[]>([])
   const [loading, setLoading] = useState(false)
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
@@ -88,7 +90,7 @@ export function SharedListMembersDialog({
   const handleRemove = async (userId: string, email: string) => {
     if (
       !window.confirm(
-        `¿Dejar de compartir la lista «${listName}» con ${email}? Perderá el acceso a los prospectos de esta lista.`,
+        t('removeConfirm', { listName, email }),
       )
     ) {
       return
@@ -109,9 +111,9 @@ export function SharedListMembersDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-label="Cerrar" onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-label={t('close')} onClick={onClose} />
       <ListMembersDialogPanel listName={listName} onClose={onClose}>
-        {loading && <p className="text-sm text-neutral-500 dark:text-neutral-400">Cargando miembros…</p>}
+        {loading && <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('loading')}</p>}
         {error && (
           <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
             {error}
@@ -119,7 +121,7 @@ export function SharedListMembersDialog({
         )}
         {!loading && collaborators.length === 0 && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Nadie más tiene acceso a esta lista todavía. Usa «Compartir esta lista» para invitar colaboradores.
+            {t('empty')}
           </p>
         )}
         {!loading && collaborators.length > 0 && (
@@ -140,7 +142,7 @@ export function SharedListMembersDialog({
                   onClick={() => void handleRemove(m.user_id, m.email)}
                   className="shrink-0 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
                 >
-                  {busyUserId === m.user_id ? '…' : 'Quitar acceso'}
+                  {busyUserId === m.user_id ? '…' : t('remove')}
                 </button>
               </li>
             ))}
@@ -160,17 +162,18 @@ function ListMembersDialogPanel({
   onClose: () => void
   children: React.ReactNode
 }) {
+  const t = useTranslations('sharedMembers')
   return (
     <div className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-6 flex flex-col gap-4 max-h-[min(90vh,520px)]">
       <div className="flex items-start justify-between gap-3 shrink-0">
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 leading-snug pr-2">
-          Compartido con — {listName}
+          {t('title', { listName })}
         </h2>
         <button
           type="button"
           onClick={onClose}
           className="shrink-0 p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-          aria-label="Cerrar"
+          aria-label={t('close')}
         >
           <X size={18} />
         </button>

@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink, Heart, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -12,14 +13,14 @@ type Dir = 'asc' | 'desc'
  * Columnas de listado. «Problemas detectados» y «Oportunidades» son observaciones del
  * equipo y viven solo en la vista de detalle (single negocio), no en tablas / Excel.
  */
-const MID_COLS: { key: keyof NegocioFila; label: string }[] = [
-  { key: 'nombre', label: 'Nombre' },
-  { key: 'direccion', label: 'Dirección' },
-  { key: 'ciudad', label: 'Ciudad' },
-  { key: 'pais', label: 'País' },
-  { key: 'telefono', label: 'Teléfono' },
-  { key: 'correo', label: 'Correo' },
-  { key: 'sitioWeb', label: 'Sitio web' },
+const MID_COLS: { key: keyof NegocioFila; labelKey: string }[] = [
+  { key: 'nombre', labelKey: 'name' },
+  { key: 'direccion', labelKey: 'address' },
+  { key: 'ciudad', labelKey: 'city' },
+  { key: 'pais', labelKey: 'country' },
+  { key: 'telefono', labelKey: 'phone' },
+  { key: 'correo', labelKey: 'email' },
+  { key: 'sitioWeb', labelKey: 'website' },
 ]
 
 const WEBSITE_LABEL_MAX = 30
@@ -99,15 +100,16 @@ export function ResultsTable({
   /** Si devuelve URL, el nombre es enlace al detalle del prospecto. */
   detailHref?: (row: NegocioFila) => string | null
 }) {
+  const t = useTranslations('resultsTable')
   const cols = useMemo(() => {
     const out: { key: ColKey; label: string }[] = [{ key: '#', label: '#' }]
-    if (showOrigenColumn) out.push({ key: 'origen', label: 'Origen' })
-    for (const c of MID_COLS) out.push({ key: c.key, label: c.label })
-    if (prospectHeart?.enabled) out.push({ key: 'prospecto', label: '¿Prospecto?' })
-    out.push({ key: 'estado', label: 'Estado' })
-    if (deleteRow?.enabled) out.push({ key: 'eliminar', label: deleteRow.label ?? 'Eliminar' })
+    if (showOrigenColumn) out.push({ key: 'origen', label: t('columns.origin') })
+    for (const c of MID_COLS) out.push({ key: c.key, label: t(`columns.${c.labelKey}`) })
+    if (prospectHeart?.enabled) out.push({ key: 'prospecto', label: t('columns.prospect') })
+    out.push({ key: 'estado', label: t('columns.status') })
+    if (deleteRow?.enabled) out.push({ key: 'eliminar', label: deleteRow.label ?? t('columns.delete') })
     return out
-  }, [showOrigenColumn, prospectHeart?.enabled, deleteRow?.enabled, deleteRow?.label])
+  }, [showOrigenColumn, prospectHeart?.enabled, deleteRow?.enabled, deleteRow?.label, t])
 
   const [sortKey, setSortKey] = useState<ColKey>('#')
   const [sortDir, setSortDir] = useState<Dir>('asc')
@@ -163,7 +165,8 @@ export function ResultsTable({
   if (!loading && !streamingMore && negocios.length === 0) return null
 
   const origenLabel = (r: NegocioFila) =>
-    r.prospectSource === 'manual' ? 'Manual' : r.prospectSource === 'search' ? 'Búsqueda' : '—'
+    r.prospectSource === 'manual' ? t('originManual') : r.prospectSource === 'search' ? t('originSearch') : '—'
+  const statusLabel = (status: ContactoEstado) => t(`statuses.${status}`)
 
   return (
     <div className="w-full">
@@ -173,37 +176,36 @@ export function ResultsTable({
             <>
               <span className="font-semibold text-indigo-600 dark:text-indigo-400">{negocios.length}</span>
               {summaryMode === 'list' ? (
-                <>{negocios.length === 1 ? ' registro' : ' registros'}</>
+                <> {t('records', { count: negocios.length })}</>
               ) : loading ? (
                 <>
                   {requestedQty && requestedQty > negocios.length && (
                     <>
                       {' '}
-                      / hasta <span className="font-semibold">{requestedQty}</span> solicitados
+                      {t('upToRequested', { requested: requestedQty })}
                     </>
                   )}
-                  <span className="text-neutral-400"> · conectando con el servidor…</span>
+                  <span className="text-neutral-400">{t('connecting')}</span>
                 </>
               ) : streamingMore ? (
                 <>
                   {requestedQty && requestedQty > negocios.length && (
                     <>
                       {' '}
-                      / hasta <span className="font-semibold">{requestedQty}</span> solicitados
+                      {t('upToRequested', { requested: requestedQty })}
                     </>
                   )}
                   <span className="text-neutral-400">
                     {' '}
-                    · sigue extrayendo en segundo plano (puede tardar varios minutos más; ya puedes usar la tabla y
-                    exportar).
+                    {t('streaming')}
                   </span>
                 </>
               ) : (
-                <>{negocios.length === 1 ? ' negocio encontrado' : ' negocios encontrados'}</>
+                <> {t('businessesFound', { count: negocios.length })}</>
               )}
             </>
           ) : (
-            <span className="text-neutral-400">{summaryMode === 'list' ? 'Cargando…' : 'Extrayendo…'}</span>
+            <span className="text-neutral-400">{summaryMode === 'list' ? t('loading') : t('extracting')}</span>
           )}
         </p>
       )}
@@ -256,15 +258,15 @@ export function ResultsTable({
                           disabled={prospectHeart.disabled}
                           title={
                             prospectHeart.removeOnly
-                              ? 'Quitar de clientes prospectos'
+                              ? t('removeFromClientProspects')
                               : n.esProspecto
-                                ? 'Quitar de prospectos'
-                                : 'Marcar como prospecto'
+                                ? t('removeFromProspects')
+                                : t('markAsProspect')
                           }
                           aria-label={
                             prospectHeart.removeOnly || n.esProspecto
-                              ? 'Quitar de clientes prospectos'
-                              : 'Marcar como prospecto'
+                              ? t('removeFromClientProspects')
+                              : t('markAsProspect')
                           }
                           onClick={() => prospectHeart.onToggle(n)}
                           className={cn(
@@ -295,7 +297,7 @@ export function ResultsTable({
                         >
                           {CONTACTO_ESTADOS.map(s => (
                             <option key={s} value={s}>
-                              {s}
+                              {statusLabel(s)}
                             </option>
                           ))}
                         </select>
@@ -307,8 +309,8 @@ export function ResultsTable({
                         <button
                           type="button"
                           disabled={deleteRow.disabled}
-                          title={deleteRow.title ?? 'Eliminar esta fila por completo'}
-                          aria-label="Eliminar fila"
+                          title={deleteRow.title ?? t('deleteFullRow')}
+                          aria-label={t('deleteRow')}
                           onClick={() => deleteRow.onDelete(n)}
                           className={cn(
                             'p-2 rounded-xl transition-colors text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30',
@@ -385,7 +387,7 @@ export function ResultsTable({
             {streamingMore && (
               <tr className="border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
                 <td colSpan={colCount} className="px-3 py-3 text-center text-xs text-neutral-500 dark:text-neutral-400">
-                  El servidor sigue enviando negocios; las filas aparecerán aquí conforme lleguen…
+                  {t('serverStreaming')}
                 </td>
               </tr>
             )}

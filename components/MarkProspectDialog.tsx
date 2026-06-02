@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { createProspectList, listProspectListsForUser } from '@/lib/supabase/collaboration'
 import type { ProspectListRow } from '@/types/collaboration'
@@ -26,6 +27,7 @@ export function MarkProspectDialog({
   lists: ProspectListRow[]
   onConfirm: (dest: MarkProspectDest) => Promise<void>
 }) {
+  const t = useTranslations('markProspect')
   const [mode, setMode] = useState<'personal' | 'existing' | 'new'>('personal')
   const [existingListId, setExistingListId] = useState<string>('')
   const [newName, setNewName] = useState('')
@@ -48,7 +50,7 @@ export function MarkProspectDialog({
       }
       if (mode === 'existing') {
         if (!existingListId) {
-          setErr('Elige una lista compartida o crea una nueva.')
+          setErr(t('chooseListError'))
           return
         }
         await onConfirm({ kind: 'shared_existing', listId: existingListId })
@@ -57,13 +59,13 @@ export function MarkProspectDialog({
       }
       const name = newName.trim()
       if (!name) {
-        setErr('Escribe un nombre para la lista compartida.')
+        setErr(t('nameRequired'))
         return
       }
       const sb = createBrowserSupabaseClient()
       const { list, error } = await createProspectList(sb, userId, name)
       if (error || !list) {
-        setErr(error?.message ?? 'No se pudo crear la lista.')
+        setErr(error?.message ?? t('createError'))
         return
       }
       await onConfirm({ kind: 'shared_new', listId: list.id, name: list.name })
@@ -77,19 +79,19 @@ export function MarkProspectDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Cerrar" onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-black/50" aria-label={t('close')} onClick={onClose} />
       <div className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-6 flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Guardar prospecto</h2>
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{t('title')}</h2>
         <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2">{row.nombre}</p>
 
         <div className="flex flex-col gap-2 text-sm">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="radio" name="dest" checked={mode === 'personal'} onChange={() => setMode('personal')} />
-            Mi lista personal (solo yo)
+            {t('personal')}
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="radio" name="dest" checked={mode === 'existing'} onChange={() => setMode('existing')} />
-            Lista compartida existente
+            {t('existing')}
           </label>
           {mode === 'existing' && (
             <select
@@ -97,23 +99,23 @@ export function MarkProspectDialog({
               value={existingListId}
               onChange={e => setExistingListId(e.target.value)}
             >
-              <option value="">— Elige —</option>
+              <option value="">{t('choose')}</option>
               {lists.map(l => (
                 <option key={l.id} value={l.id}>
                   {l.name}
-                  {l.owner_id !== userId ? ' (compartida)' : ''}
+                  {l.owner_id !== userId ? t('sharedSuffix') : ''}
                 </option>
               ))}
             </select>
           )}
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="radio" name="dest" checked={mode === 'new'} onChange={() => setMode('new')} />
-            Nueva lista compartida (luego podrás invitar)
+            {t('new')}
           </label>
           {mode === 'new' && (
             <input
               className="mt-1 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 py-2 text-sm"
-              placeholder="Nombre de la lista…"
+              placeholder={t('newPlaceholder')}
               value={newName}
               onChange={e => setNewName(e.target.value)}
             />
@@ -124,7 +126,7 @@ export function MarkProspectDialog({
 
         <div className="flex justify-end gap-2">
           <button type="button" className="px-3 py-2 text-sm rounded-lg border" onClick={onClose} disabled={busy}>
-            Cancelar
+            {t('cancel')}
           </button>
           <button
             type="button"
@@ -132,7 +134,7 @@ export function MarkProspectDialog({
             disabled={busy}
             onClick={() => void handleSubmit()}
           >
-            Guardar
+            {t('save')}
           </button>
         </div>
       </div>

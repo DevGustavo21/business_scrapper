@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useState, useCallback, useRef, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/i18n/navigation'
@@ -76,6 +77,8 @@ function parseSseBlocks(buffer: string, onBlock: (event: string, data: string) =
 
 function HomeInner() {
   const user = useSupabaseUser()
+  const t = useTranslations('dashboard')
+  const tCommon = useTranslations('common')
   const router = useRouter()
   const searchParams = useSearchParams()
   const urlSearchId = searchParams.get('search')
@@ -179,7 +182,7 @@ function HomeInner() {
       const sb = createBrowserSupabaseClient()
       const { data, error: err } = await fetchProspectSearch(sb, id)
       if (err || !data) {
-        setError(err?.message ?? 'No se pudo cargar la búsqueda.')
+        setError(err?.message ?? t('loadSearchError'))
         return
       }
       if (data.user_id !== user.id) {
@@ -361,7 +364,7 @@ function HomeInner() {
   const handleProspectToggle = useCallback(
     async (row: NegocioFila) => {
       if (!user || !isSupabaseConfigured()) {
-        setError('Inicia sesión para marcar prospectos.')
+        setError(t('signInToMark'))
         return
       }
       const sid = activeSearchIdRef.current
@@ -648,7 +651,7 @@ function HomeInner() {
   if (user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
-        Cargando…
+        {t('loading')}
       </div>
     )
   }
@@ -668,7 +671,7 @@ function HomeInner() {
       {historyOpen && (
         <button
           type="button"
-          aria-label="Cerrar historial"
+          aria-label={t('deleteSearchTitle')}
           className="fixed inset-0 z-40 bg-black/50"
           onClick={() => setHistoryOpen(false)}
         />
@@ -699,19 +702,16 @@ function HomeInner() {
         <main className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
           <div className="text-center flex flex-col items-center gap-3 max-w-2xl mx-auto">
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
-              Prospecta negocios en segundos
+              {t('heroTitle')}
             </h1>
             <p className="text-neutral-500 dark:text-neutral-400 max-w-lg text-sm sm:text-base">
-              Cada búsqueda <strong>tuya</strong> queda en el historial lateral (con sesión iniciada). Lo que comparte un
-              compañero en una carpeta se abre en una vista aparte, no mezclada con tu historial.
+              {t('heroSubtitle')}
             </p>
           </div>
           <SearchPanel key={searchFormKey} onSearch={handleSearch} loading={loading} />
           {loading && (
             <p className="text-center text-sm text-neutral-500 dark:text-neutral-400 max-w-xl mx-auto -mt-4">
-              Fuentes: <strong>Google Maps</strong> y, si hace falta, <strong>Páginas Amarillas</strong>. Las filas se van
-              sumando al vuelo; la extracción completa puede tardar <strong>hasta unos 4 minutos</strong>. Cuando ya veas
-              datos en la tabla, la búsqueda <strong>sigue en segundo plano</strong> hasta el botón vuelva a «Buscar».
+              {t('loadingSources')}
             </p>
           )}
           {negocios.length > 0 && (
@@ -726,8 +726,7 @@ function HomeInner() {
           {loggedIn && activeSearchId && user && (
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-between items-stretch sm:items-center max-w-4xl mx-auto w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-950/40 px-4 py-3">
               <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-md">
-                Al marcar con el corazón elige si va a tu <strong>lista personal</strong> o a una{' '}
-                <strong>lista compartida</strong> (nueva o existente).
+                {t('prospectHint')}
               </p>
               <div className="flex flex-wrap gap-2 items-center justify-end">
                 <button
@@ -735,14 +734,14 @@ function HomeInner() {
                   onClick={() => setShareSearchOpen(true)}
                   className="rounded-lg px-3 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
                 >
-                  Compartir búsqueda
+                  {t('shareSearch')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setAddFolderOpen(true)}
                   className="rounded-lg px-3 py-2 text-xs font-semibold border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 >
-                  Añadir a carpeta
+                  {t('addToFolder')}
                 </button>
               </div>
             </div>
@@ -776,7 +775,7 @@ function HomeInner() {
                 ? {
                     enabled: true,
                     disabled: loading && negocios.length === 0,
-                    title: 'Eliminar esta fila de la búsqueda',
+                    title: t('deleteRowTitle'),
                     onDelete: handleDeleteNegocioRow,
                   }
                 : undefined
@@ -787,7 +786,7 @@ function HomeInner() {
 
       <footer className="border-t border-neutral-200 dark:border-neutral-800 py-4 shrink-0">
         <p className="text-center text-xs text-neutral-400 dark:text-neutral-600">
-          Uso personal — extrae datos públicos disponibles en internet
+          {t('footer')}
         </p>
       </footer>
 
@@ -823,7 +822,7 @@ function HomeInner() {
             setShareNewListId(null)
             setShareNewListTitle('')
           }}
-          title={shareNewListTitle || 'Lista compartida'}
+          title={shareNewListTitle || t('sharedListFallback')}
           resourceType="prospect_list"
           resourceId={shareNewListId}
           inviterUserId={user.id}
@@ -855,14 +854,14 @@ function HomeInner() {
       <ConfirmDialog
         open={Boolean(deleteSearchTarget)}
         busy={deleteSearchBusy}
-        title="Eliminar búsqueda del historial"
+        title={t('deleteSearchTitle')}
         message={
           deleteSearchTarget
-            ? `Se eliminará «${deleteSearchTarget.categoria} · ${deleteSearchTarget.ubicacion}» del historial. Esta acción no se puede deshacer.`
+            ? t('deleteSearchMessage', { label: `${deleteSearchTarget.categoria} · ${deleteSearchTarget.ubicacion}` })
             : ''
         }
-        confirmLabel="Eliminar"
-        cancelLabel="Cancelar"
+        confirmLabel={tCommon('delete')}
+        cancelLabel={tCommon('cancel')}
         confirmVariant="danger"
         onConfirm={() => void confirmDeleteSearch()}
         onCancel={() => {
@@ -873,14 +872,14 @@ function HomeInner() {
       <ConfirmDialog
         open={Boolean(deleteRowTarget)}
         busy={deleteRowBusy}
-        title="Eliminar negocio"
+        title={t('deleteBusinessTitle')}
         message={
           deleteRowTarget
-            ? `Se quitará «${deleteRowTarget.nombre}» de los resultados y de la búsqueda guardada. Si estaba marcado como prospecto, también se borrará de Clientes prospectos.`
+            ? t('deleteBusinessMessage', { name: deleteRowTarget.nombre })
             : ''
         }
-        confirmLabel="Eliminar"
-        cancelLabel="Cancelar"
+        confirmLabel={tCommon('delete')}
+        cancelLabel={tCommon('cancel')}
         confirmVariant="danger"
         onConfirm={() => void confirmDeleteNegocioRow()}
         onCancel={() => {
@@ -896,7 +895,7 @@ export default function Home() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
-          Cargando…
+          Loading…
         </div>
       }
     >

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { CheckCircle2, Clock, SearchX } from 'lucide-react'
 import type { ScrapeStreamDone } from '@/types/business'
 
@@ -17,6 +18,7 @@ export function SearchCompleteDialog({
   summary: SearchCompleteSummary | null
   onClose: () => void
 }) {
+  const t = useTranslations('searchComplete')
   if (!open || !summary) return null
 
   const { reason, total, requested, categoria, ubicacion } = summary
@@ -25,25 +27,31 @@ export function SearchCompleteDialog({
   const vacio = total === 0
 
   let icon = <CheckCircle2 className="text-emerald-500 shrink-0" size={40} />
-  let titulo = 'Búsqueda finalizada'
+  const businessWord = (count: number) => (count === 1 ? t('businessSingular') : t('businessPlural'))
+  const resultWord = (count: number) => (count === 1 ? t('resultSingular') : t('resultPlural'))
+  let titulo = t('finished')
   let detalle: string
 
   if (vacio) {
     icon = <SearchX className="text-neutral-400 shrink-0" size={40} />
-    titulo = 'Búsqueda finalizada sin resultados'
-    detalle =
-      'No se pudo extraer ningún negocio con los criterios indicados. Puedes probar otra categoría, ampliar la zona o comprobar la conexión.'
+    titulo = t('emptyTitle')
+    detalle = t('emptyDetail')
   } else if (cumplido) {
-    titulo = 'Búsqueda completada'
-    detalle = `Se alcanzó el objetivo: ${total} negocio${total === 1 ? '' : 's'} (pedidos: ${requested}). Ya puedes revisar la tabla y exportar a Excel si lo necesitas.`
+    titulo = t('completedTitle')
+    detalle = t('completedDetail', { total, requested, businesses: businessWord(total) })
   } else if (parcialTiempo) {
     icon = <Clock className="text-amber-500 shrink-0" size={40} />
-    titulo = 'Búsqueda finalizada por tiempo'
-    detalle = `El tiempo máximo de extracción se agotó antes de llegar a ${requested} negocios. Se guardaron ${total} resultado${total === 1 ? '' : 's'}; puedes exportarlos o lanzar otra búsqueda.`
+    titulo = t('timeoutTitle')
+    detalle = t('timeoutPartialDetail', { total, requested, results: resultWord(total) })
   } else if (reason === 'timeout' && total >= requested) {
-    detalle = `Se obtuvieron ${total} negocio${total === 1 ? '' : 's'} (solicitados: ${requested}). La búsqueda cerró por límite de tiempo con la cuota cubierta.`
+    detalle = t('timeoutCoveredDetail', { total, requested, businesses: businessWord(total) })
   } else {
-    detalle = `Resultado: ${total} negocio${total === 1 ? '' : 's'} de ${requested} solicitados. Motivo de cierre: ${reason === 'target_met' ? 'objetivo alcanzado' : 'tiempo máximo'}.`
+    detalle = t('fallbackDetail', {
+      total,
+      requested,
+      businesses: businessWord(total),
+      reason: reason === 'target_met' ? t('reasonTargetMet') : t('reasonTimeout'),
+    })
   }
 
   return (
@@ -56,7 +64,7 @@ export function SearchCompleteDialog({
       <button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-        aria-label="Cerrar"
+        aria-label={t('close')}
         onClick={onClose}
       />
       <div className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-6 flex flex-col gap-4">
@@ -68,7 +76,7 @@ export function SearchCompleteDialog({
             </h2>
             <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{detalle}</p>
             <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-500">
-              <span className="font-medium text-neutral-700 dark:text-neutral-300">Consulta:</span> {categoria} ·{' '}
+              <span className="font-medium text-neutral-700 dark:text-neutral-300">{t('query')}</span> {categoria} ·{' '}
               {ubicacion}
             </p>
           </div>
@@ -78,7 +86,7 @@ export function SearchCompleteDialog({
           onClick={onClose}
           className="w-full py-3 rounded-xl font-semibold text-sm bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-colors"
         >
-          Entendido
+          {t('ok')}
         </button>
       </div>
     </div>

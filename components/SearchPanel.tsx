@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { Search, Loader2 } from 'lucide-react'
 import { LocationAutocomplete } from '@/components/LocationAutocomplete'
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function SearchPanel({ onSearch, loading }: Props) {
+  const t = useTranslations('searchPanel')
   const [categoria, setCategoria] = useState('')
   const [ubicacion, setUbicacion] = useState('')
   const [cantidad, setCantidad] = useState(12)
@@ -26,38 +28,37 @@ export function SearchPanel({ onSearch, loading }: Props) {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="cat" className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-            Categoría del negocio
+            {t('categoryLabel')}
           </label>
           <input
             id="cat"
             type="text"
             value={categoria}
             onChange={e => setCategoria(e.target.value)}
-            placeholder="Ej: dentistas, restaurantes, gimnasios…"
+            placeholder={t('categoryPlaceholder')}
             disabled={loading}
             className={input}
           />
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="ubi" className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-            Ubicación de la búsqueda
+            {t('locationLabel')}
           </label>
           <LocationAutocomplete
             id="ubi"
             value={ubicacion}
             onChange={setUbicacion}
-            placeholder="Ej: Madrid, España · Florida, Estados Unidos · Managua, Nicaragua"
+            placeholder={t('locationPlaceholder')}
             disabled={loading}
           />
           <p className="text-xs text-neutral-500 dark:text-neutral-500">
-            Empieza a escribir un país, estado o ciudad y elige una sugerencia para mejores resultados. También puedes
-            escribir libremente.
+            {t('locationHelp')}
           </p>
         </div>
         <div className="flex gap-3">
           <div className="flex flex-col gap-1.5 flex-1">
             <label htmlFor="cant" className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-              Cantidad de resultados
+              {t('quantityLabel')}
             </label>
             <select
               id="cant"
@@ -68,7 +69,7 @@ export function SearchPanel({ onSearch, loading }: Props) {
             >
               {OPTS.map(n => (
                 <option key={n} value={n}>
-                  {n} negocios
+                  {t('businessesOption', { count: n })}
                 </option>
               ))}
             </select>
@@ -83,12 +84,12 @@ export function SearchPanel({ onSearch, loading }: Props) {
               {loading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Buscando…
+                  {t('searching')}
                 </>
               ) : (
                 <>
                   <Search size={16} />
-                  Buscar
+                  {t('search')}
                 </>
               )}
             </button>

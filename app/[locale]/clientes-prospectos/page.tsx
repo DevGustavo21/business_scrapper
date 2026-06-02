@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/i18n/navigation'
@@ -31,6 +32,7 @@ import type { ClientProspectRow } from '@/types/client-prospect'
 import type { ProspectListRow } from '@/types/collaboration'
 
 function ClientesProspectosInner() {
+  const t = useTranslations('clientProspects')
   const user = useSupabaseUser()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -123,7 +125,7 @@ function ClientesProspectosInner() {
   }
 
   const requestDeleteProspect = (row: NegocioFila) => {
-    if (!window.confirm(`¿Eliminar por completo «${row.nombre}» de clientes prospectos? Esta acción no se puede deshacer.`))
+    if (!window.confirm(t('deleteConfirm', { name: row.nombre })))
       return
     void deleteProspectById(row.id)
   }
@@ -154,55 +156,51 @@ function ClientesProspectosInner() {
 
   const filterHint =
     listFilter === 'all'
-      ? 'Mostrando todos los accesibles'
+      ? t('showingAll')
       : listFilter === 'none'
-        ? 'Solo prospectos sin lista'
-        : `Lista: ${listNameById.get(listFilter) ?? listFilter}`
+        ? t('showingNone')
+        : t('showingList', { name: listNameById.get(listFilter) ?? listFilter })
 
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader />
       <main className="flex-1 max-w-[1600px] mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100">Clientes prospectos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100">{t('title')}</h1>
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400 max-w-2xl">
-            Listado unificado (personales y compartidos por lista). Marca desde la{' '}
+            {t('description')}
+            {/* Links principales conservados para navegación rápida. */}
+            {' '}
             <Link href="/" className="text-indigo-600 dark:text-indigo-400 font-medium">
-              búsqueda
+              {t('searchLink')}
             </Link>{' '}
-            o alta en{' '}
+            ·{' '}
             <Link href="/agregar-prospectos" className="text-indigo-600 dark:text-indigo-400 font-medium">
-              Agregar prospectos
+              {t('addProspectsLink')}
             </Link>
-            . Las listas compartidas se crean o eligen al dar «me gusta» a un resultado en la{' '}
-            <Link href="/" className="text-indigo-600 dark:text-indigo-400 font-medium">
-              búsqueda
-            </Link>
-            . Si eres <strong>dueño</strong> de una lista, selecciónala en el filtro y usa{' '}
-            <strong>Compartir esta lista</strong> para invitar a tu equipo.
           </p>
         </div>
 
         {!loggedIn && (
           <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
             <Link href="/login" className="font-semibold underline">
-              Inicia sesión
+              {t('loginPrefix')}
             </Link>{' '}
-            para ver tus prospectos guardados.
+            {t('loginSuffix')}
           </p>
         )}
 
         {loggedIn && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-950/40 px-4 py-3">
             <label className="flex flex-col gap-1 text-xs font-medium text-neutral-700 dark:text-neutral-300 min-w-[220px]">
-              Filtrar por lista
+              {t('filterByList')}
               <select
                 value={listFilter}
                 onChange={e => setListFilter(e.target.value)}
                 className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-3 py-2 text-sm"
               >
-                <option value="all">Todas</option>
-                <option value="none">Sin lista (personal)</option>
+                <option value="all">{t('all')}</option>
+                <option value="none">{t('none')}</option>
                 {lists.map(l => (
                   <option key={l.id} value={l.id}>
                     {l.name}
@@ -218,7 +216,7 @@ function ClientesProspectosInner() {
                   onClick={() => setSharedMembersOpen(true)}
                   className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold border border-neutral-300 dark:border-neutral-600 text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 >
-                  Compartido con ({collaboratorCount})
+                  {t('sharedWith', { count: collaboratorCount })}
                 </button>
               )}
               {canShareSelectedList && selectedList && (
@@ -227,7 +225,7 @@ function ClientesProspectosInner() {
                   onClick={() => setShareListOpen(true)}
                   className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
                 >
-                  Compartir esta lista
+                  {t('shareThisList')}
                 </button>
               )}
             </div>
@@ -236,7 +234,7 @@ function ClientesProspectosInner() {
 
         {loggedIn && negocios.length > 0 && (
           <div className="flex justify-end">
-            <ExportButton negocios={negocios} categoria="Clientes prospectos" etiquetaUbicacion="Lista exportada" />
+          <ExportButton negocios={negocios} categoria={t('exportCategory')} etiquetaUbicacion={t('exportLocation')} />
           </div>
         )}
 
@@ -252,7 +250,7 @@ function ClientesProspectosInner() {
               ? {
                   enabled: true,
                   disabled: loading,
-                  title: 'Eliminar este prospecto de forma permanente',
+                  title: t('deleteTitle'),
                   onDelete: requestDeleteProspect,
                 }
               : undefined
@@ -261,13 +259,13 @@ function ClientesProspectosInner() {
 
         {!loading && loggedIn && filteredRows.length === 0 && rows.length > 0 && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            No hay prospectos con este filtro. Cambia la lista en el selector superior.
+            {t('filteredEmpty')}
           </p>
         )}
 
         {!loading && loggedIn && rows.length === 0 && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Aún no hay prospectos. Márcalos con el corazón en los resultados de una búsqueda o créalos en Agregar prospectos.
+            {t('empty')}
           </p>
         )}
       </main>
@@ -314,7 +312,7 @@ export default function ClientesProspectosPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500">Cargando…</div>
+        <div className="min-h-screen flex items-center justify-center text-sm text-neutral-500">Loading…</div>
       }
     >
       <ClientesProspectosInner />
