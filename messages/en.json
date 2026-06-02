@@ -1,0 +1,360 @@
+{
+  "common": {
+    "appName": "Business Prospector",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "perMonthUsd": "USD / month",
+    "free": "$0",
+    "foreverFree": "Forever · No card required"
+  },
+  "header": {
+    "signIn": "Sign in",
+    "pricing": "Pricing",
+    "history": "Search history",
+    "menu": "Menu"
+  },
+  "nav": {
+    "home": "Home",
+    "folders": "Folders",
+    "addProspects": "Add prospects",
+    "clientProspects": "Client prospects"
+  },
+  "locale": {
+    "switcherLabel": "Language",
+    "english": "English",
+    "spanish": "Spanish"
+  },
+  "footer": {
+    "copyright": "© {year} Business Prospector · Personal use — extracts public data available on the internet",
+    "login": "Sign in"
+  },
+  "landing": {
+    "hero": {
+      "badge": "Your new B2B prospecting engine",
+      "titleLead": "Turn the public web into",
+      "titleAccent": "real customers",
+      "subtitle": "Search, qualify, and organize thousands of local businesses from Google Maps and Yellow Pages. Mark prospects, share lists with your team, and export to Excel in a single click.",
+      "ctaPrimary": "Start free with Google",
+      "ctaSecondary": "See features",
+      "disclaimer": "No credit card · Sign in with your Google account"
+    },
+    "mockup": {
+      "url": "businessprospector.app/search",
+      "historyEyebrow": "History",
+      "historyItems": {
+        "first": "Dentists · Madrid",
+        "second": "Restaurants · Mexico City",
+        "third": "Gyms · Bogotá",
+        "fourth": "Clinics · Buenos Aires"
+      },
+      "categoryLabel": "Category",
+      "categoryValue": "dentists",
+      "locationLabel": "Location",
+      "locationValue": "Madrid, Spain",
+      "search": "Search",
+      "tableBusiness": "Business",
+      "tablePhone": "Phone",
+      "tableCity": "City",
+      "tableStatus": "Status",
+      "rows": {
+        "first": { "name": "Clínica Dental Sonrisa", "city": "Madrid · ES", "phone": "+34 91 234 5678", "status": "Interested" },
+        "second": { "name": "Dentamed Centro Dental", "city": "Madrid · ES", "phone": "+34 91 555 0123", "status": "Contacted" },
+        "third": { "name": "Ortodoncia Premium", "city": "Madrid · ES", "phone": "+34 91 877 4421", "status": "Pending" },
+        "fourth": { "name": "Estética Dental Salamanca", "city": "Madrid · ES", "phone": "+34 91 902 3344", "status": "Customer" }
+      },
+      "liveStatus": "Live extraction · 4/12 businesses",
+      "exportLabel": "Export to Excel"
+    },
+    "socialProof": {
+      "eyebrow": "Why teams pick us",
+      "title": "Sales teams that already prospect better",
+      "testimonials": {
+        "first": {
+          "quote": "We stopped paying for contact lists. Every Monday we launch 5 searches and have the week planned in 10 minutes.",
+          "author": "Lucía Pérez",
+          "role": "Sales Lead · Agencia Madrid"
+        },
+        "second": {
+          "quote": "Pulling WhatsApp numbers and hours from Maps was a game changer. The whole team now works from the same shared list.",
+          "author": "Marco Salinas",
+          "role": "Co-founder · Pulse Studio"
+        },
+        "third": {
+          "quote": "We went from manually exporting each business to having a clean, deduped Excel in seconds. No scripts, no fighting the web.",
+          "author": "Andrea Rojas",
+          "role": "BDR · Latam Growth"
+        }
+      },
+      "stats": {
+        "first": { "value": "98%", "label": "of searches finish with clean, deduplicated data" },
+        "second": { "value": "7.2k+", "label": "businesses extracted every month by active teams" },
+        "third": { "value": "<1 min", "label": "average end-to-end search time" }
+      }
+    },
+    "missions": {
+      "eyebrow": "Our mission",
+      "title": "Make every sales hour worth more than the last",
+      "description": "We built Business Prospector because we hate burning weeks on spreadsheets. These are the three principles guiding every feature we ship.",
+      "items": {
+        "competition": {
+          "title": "Beat the competition to the punch",
+          "body": "Detect local businesses in hours, not weeks. Stop paying for stale databases or chasing leads everyone already called."
+        },
+        "publicData": {
+          "title": "Only public data, no tricks",
+          "body": "We extract whatever anyone can see on Google Maps or Yellow Pages. You decide what to keep, share, or discard."
+        },
+        "team": {
+          "title": "Make your team prospect as one",
+          "body": "Shared lists, collaborative folders, and real-time notifications so no prospect ever goes cold."
+        }
+      }
+    },
+    "features": {
+      "eyebrow": "Features",
+      "title": "Everything you need to fill the pipeline this week",
+      "items": {
+        "streaming": {
+          "tag": "Core",
+          "title": "Streaming search",
+          "body": "Businesses appear in the table while the engine keeps extracting. Cancelable and retryable at any time."
+        },
+        "sources": {
+          "tag": "Sources",
+          "title": "Two sources, one format",
+          "body": "Google Maps as primary and Yellow Pages as fallback. Normalized, deduplicated data ready for your CRM."
+        },
+        "prospects": {
+          "tag": "Workflow",
+          "title": "Mark prospects on the fly",
+          "body": "One click on the heart and the business jumps to your personal list or a list shared with your team."
+        },
+        "folders": {
+          "tag": "Collaboration",
+          "title": "Shared folders and lists",
+          "body": "Organize searches by campaign, client, or sector. Invite your team with an email and work on the same view."
+        },
+        "excel": {
+          "tag": "Data",
+          "title": "Export to a clean Excel",
+          "body": "An Excel with stable columns, no duplicates, and your contact progress. Perfect to hand over to your CRM."
+        }
+      },
+      "streamingPreview": {
+        "first": "Café del Sol · Mexico City",
+        "second": "Bistró Lola · Polanco",
+        "third": "Restaurante Mar y Tierra · Roma Norte",
+        "fourth": "Antojería Casa Pepa · Coyoacán"
+      },
+      "foldersPreview": {
+        "first": { "name": "Q3 Campaign", "searches": "{count} searches" },
+        "second": { "name": "Mexico City", "searches": "{count} searches" },
+        "third": { "name": "Madrid", "searches": "{count} searches" },
+        "fourth": { "name": "Shared", "searches": "{count} searches" }
+      }
+    },
+    "steps": {
+      "eyebrow": "How it works",
+      "title": "From a prospecting idea to a call-ready list in 4 steps",
+      "cta": "Try the full flow",
+      "items": {
+        "define": {
+          "step": "01",
+          "title": "Define the search",
+          "body": "Category, city, and quantity. No matter the country: Maps + Yellow Pages adapt to the local language."
+        },
+        "stream": {
+          "step": "02",
+          "title": "Receive in streaming",
+          "body": "Rows show up in the table while the engine extracts. Start qualifying even before it finishes."
+        },
+        "tag": {
+          "step": "03",
+          "title": "Mark, comment, and share",
+          "body": "Tap the heart to move a business to a personal or shared list. Your team sees the change instantly."
+        },
+        "export": {
+          "step": "04",
+          "title": "Export or stay in the app",
+          "body": "Download a clean Excel, keep working inside Business Prospector, or hand the data over to your CRM."
+        }
+      }
+    },
+    "benefits": {
+      "eyebrow": "Benefits",
+      "title": "More pipeline, fewer spreadsheets",
+      "items": {
+        "speed": {
+          "title": "Real speed",
+          "body": "From zero to 100 qualified businesses in under 4 minutes per search."
+        },
+        "consistent": {
+          "title": "Consistent data",
+          "body": "Name, phone, address, website, and hours normalized on every row."
+        },
+        "noScripts": {
+          "title": "No scripts, no proxies",
+          "body": "Forget maintaining your own scraper. We rotate the sources for you."
+        },
+        "history": {
+          "title": "History and notifications",
+          "body": "Every search is saved. We ping you when a teammate shares a list with you."
+        }
+      }
+    },
+    "finalCta": {
+      "badge": "Ready to start?",
+      "titleLead": "Launch your first search in",
+      "titleAccent": "less than a minute",
+      "subtitle": "Sign in with your Google account. No setup, no card, no surprises. Leave the landing and go straight into your first prospect list.",
+      "ctaPrimary": "Sign in with Google",
+      "ctaSecondary": "Review features"
+    }
+  },
+  "pricing": {
+    "hero": {
+      "badge": "Plans and pricing",
+      "titleLead": "Pick the plan that",
+      "titleAccent": "moves your pipeline",
+      "subtitle": "Start free and upgrade whenever you need to unlock exports, collaboration, and team tools. No lock-in, no surprises.",
+      "disclaimer": "Prices in USD · Monthly billing · Tax calculated at checkout"
+    },
+    "featuredBadge": "Most popular",
+    "plans": {
+      "free": {
+        "name": "Free",
+        "pitch": "To try the prospecting engine with no strings attached.",
+        "ctaLabel": "Start for free",
+        "badge": "To get started",
+        "features": {
+          "weekly": "5 searches per week",
+          "monthly": "20 searches per month",
+          "limit": "Up to 24 results per search",
+          "history": "Saved search history",
+          "profile": "Customizable profile"
+        },
+        "notIncluded": {
+          "export": "Export to Excel",
+          "collab": "Folders and lists shared with your team",
+          "blacklist": "Business blacklist",
+          "notifications": "Collaboration notifications",
+          "messaging": "Messaging, timeline, and tasks"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "pitch": "For freelancers and small teams who prospect seriously.",
+        "ctaLabel": "Try Pro",
+        "features": {
+          "weekly": "50 searches per week",
+          "monthly": "200 searches per month",
+          "limit": "Up to 48 results per search",
+          "export": "Export to Excel",
+          "invite": "Invite members to folders and lists",
+          "blacklist": "Blacklist to exclude businesses",
+          "notifications": "Collaboration notifications",
+          "history": "Saved search history",
+          "profile": "Customizable profile"
+        },
+        "notIncluded": {
+          "messaging": "Internal messaging per prospect",
+          "timeline": "Activity timeline",
+          "tasks": "Tasks assigned to teammates",
+          "manual": "Manual prospect upload"
+        }
+      },
+      "premium": {
+        "name": "Premium",
+        "pitch": "For teams that close accounts and run the full pipeline.",
+        "ctaLabel": "Try Premium",
+        "badge": "To scale",
+        "features": {
+          "unlimited": "Unlimited searches",
+          "unlimitedHint": "no monthly or weekly cap",
+          "limit": "Up to 100 results per search",
+          "proIncluded": "Everything in Pro",
+          "messaging": "Internal messaging per prospect",
+          "timeline": "Activity timeline",
+          "tasks": "Tasks assigned to teammates",
+          "manual": "Manual prospect upload",
+          "manualHint": "from /add-prospects"
+        }
+      }
+    },
+    "comparison": {
+      "eyebrow": "Comparison",
+      "title": "Everything each plan includes",
+      "subtitle": "Compare features at a glance and pick the plan you need today. You can upgrade as your team grows.",
+      "featureHeader": "Feature",
+      "rows": {
+        "weekly": "Searches per week",
+        "monthly": "Searches per month",
+        "limit": "Results per search",
+        "history": "Search history",
+        "profile": "Customizable profile",
+        "export": "Export to Excel",
+        "folders": "Shared folders",
+        "lists": "Shared prospect lists",
+        "blacklist": "Business blacklist",
+        "notifications": "Collaboration notifications",
+        "messaging": "Internal messaging per prospect",
+        "timeline": "Activity timeline",
+        "tasks": "Tasks assigned to teammates",
+        "manual": "Add prospects manually"
+      },
+      "values": {
+        "freeWeekly": "5",
+        "proWeekly": "50",
+        "premiumWeekly": "Unlimited",
+        "freeMonthly": "20",
+        "proMonthly": "200",
+        "premiumMonthly": "Unlimited",
+        "freeLimit": "Up to 24",
+        "proLimit": "Up to 48",
+        "premiumLimit": "Up to 100"
+      }
+    },
+    "faq": {
+      "eyebrow": "Frequently asked questions",
+      "title": "What people usually ask us",
+      "items": {
+        "card": {
+          "q": "Do I need a card for the Free plan?",
+          "a": "No. You sign in with Google and start using Business Prospector with 5 weekly searches without entering any payment data."
+        },
+        "switch": {
+          "q": "Can I switch or cancel my plan anytime?",
+          "a": "Yes. You can upgrade, downgrade, or cancel your subscription anytime from your billing panel. You keep access until the end of the paid period."
+        },
+        "what": {
+          "q": "What counts as “one search”?",
+          "a": "Every time you hit the Search button with a category + location combo, one search is consumed, regardless of how many results it returns."
+        },
+        "rollover": {
+          "q": "Do unused searches roll over?",
+          "a": "No. The weekly and monthly counters reset automatically; unused searches do not roll into the next period."
+        },
+        "team": {
+          "q": "Do Pro and Premium support teams?",
+          "a": "Yes. From Pro you can invite members to shared folders and lists. Premium adds internal messaging, tasks, and timeline to coordinate the work."
+        },
+        "payments": {
+          "q": "Which payment methods do you accept?",
+          "a": "We are finalizing the payments integration. Once enabled, we will accept international cards and the main local methods of each region."
+        }
+      }
+    },
+    "finalCta": {
+      "badge": "Start today",
+      "titleLead": "Try Business Prospector",
+      "titleAccent": "risk-free",
+      "subtitle": "Create your account with Google and start on the free plan. When you need more volume or collaboration, upgrade to Pro or Premium in a couple of clicks.",
+      "ctaPrimary": "Start for free",
+      "ctaSecondary": "Back to home"
+    },
+    "footerNote": "© {year} Business Prospector · Prices subject to change without notice"
+  }
+}

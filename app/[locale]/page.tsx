@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { Landing } from '@/components/Landing'
 import { cn } from '@/lib/utils'
@@ -182,7 +183,10 @@ function HomeInner() {
         return
       }
       if (data.user_id !== user.id) {
-        router.replace(`/busqueda-compartida/${encodeURIComponent(id)}`)
+        router.replace({
+          pathname: '/busqueda-compartida/[searchId]',
+          params: { searchId: id },
+        })
         return
       }
       setError(null)
@@ -235,6 +239,7 @@ function HomeInner() {
     freshSearchExcludeRef.current = true
     setSearchFormKey(k => k + 1)
     if (urlSearchId) router.replace('/', { scroll: false })
+    /* el path '/' no se traduce entre idiomas, así que basta con la versión literal */
   }, [urlSearchId, router])
 
   /** Abre el modal de confirmación; el borrado real lo dispara `confirmDeleteSearch`. */

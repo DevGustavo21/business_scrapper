@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { Building2 } from 'lucide-react'
 
-export function BrandLogo({ href = '/' }: { href?: string }) {
+export function BrandLogo({ href = '/' }: { href?: '/' }) {
   return (
     <Link href={href} className="group flex items-center gap-2.5 min-w-0">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_24px_rgba(99,102,241,0.5)] transition-transform group-hover:scale-105">

@@ -1,13 +1,16 @@
 'use client'
 
-import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { ArrowRight } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
 import { BrandLogo } from '@/components/BrandLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LocaleSwitcher } from '@/components/LocaleSwitcher'
 import { useSupabaseUser } from '@/hooks/useSupabaseUser'
 
 export function LandingHeader() {
   const user = useSupabaseUser()
+  const t = useTranslations('header')
   const showLogin = !user
 
   return (
@@ -20,15 +23,16 @@ export function LandingHeader() {
             href="/precios"
             className="hidden text-sm font-medium text-neutral-600 transition-colors hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-white"
           >
-            Precios
+            {t('pricing')}
           </Link>
+          <LocaleSwitcher />
           <ThemeToggle />
           {showLogin && (
             <Link
               href="/login"
               className="inline-flex items-center gap-1.5 rounded-full border border-neutral-900/10 bg-neutral-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:translate-y-[-1px] hover:shadow-md dark:border-white/10 dark:bg-white dark:text-neutral-900"
             >
-              Iniciar sesión
+              {t('signIn')}
               <ArrowRight size={14} />
             </Link>
           )}

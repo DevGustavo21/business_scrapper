@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Settings } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'

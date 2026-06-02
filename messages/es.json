@@ -1,0 +1,360 @@
+{
+  "common": {
+    "appName": "Business Prospector",
+    "loading": "Cargando…",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "close": "Cerrar",
+    "perMonthUsd": "USD / mes",
+    "free": "$0",
+    "foreverFree": "Para siempre · Sin tarjeta"
+  },
+  "header": {
+    "signIn": "Iniciar sesión",
+    "pricing": "Precios",
+    "history": "Historial de búsquedas",
+    "menu": "Menú"
+  },
+  "nav": {
+    "home": "Inicio",
+    "folders": "Carpetas",
+    "addProspects": "Agregar prospectos",
+    "clientProspects": "Clientes prospectos"
+  },
+  "locale": {
+    "switcherLabel": "Idioma",
+    "english": "Inglés",
+    "spanish": "Español"
+  },
+  "footer": {
+    "copyright": "© {year} Business Prospector · Uso personal — extrae datos públicos disponibles en internet",
+    "login": "Iniciar sesión"
+  },
+  "landing": {
+    "hero": {
+      "badge": "Tu nuevo motor de prospección B2B",
+      "titleLead": "Convierte la web pública en",
+      "titleAccent": "clientes reales",
+      "subtitle": "Busca, califica y organiza miles de negocios locales desde Google Maps y Páginas Amarillas. Marca prospectos, comparte listas con tu equipo y exporta a Excel en un solo clic.",
+      "ctaPrimary": "Empezar gratis con Google",
+      "ctaSecondary": "Ver funcionalidades",
+      "disclaimer": "Sin tarjeta de crédito · Inicia sesión con tu cuenta de Google"
+    },
+    "mockup": {
+      "url": "businessprospector.app/busqueda",
+      "historyEyebrow": "Historial",
+      "historyItems": {
+        "first": "Dentistas · Madrid",
+        "second": "Restaurantes · CDMX",
+        "third": "Gimnasios · Bogotá",
+        "fourth": "Clínicas · Buenos Aires"
+      },
+      "categoryLabel": "Categoría",
+      "categoryValue": "dentistas",
+      "locationLabel": "Ubicación",
+      "locationValue": "Madrid, España",
+      "search": "Buscar",
+      "tableBusiness": "Negocio",
+      "tablePhone": "Teléfono",
+      "tableCity": "Ciudad",
+      "tableStatus": "Estado",
+      "rows": {
+        "first": { "name": "Clínica Dental Sonrisa", "city": "Madrid · ES", "phone": "+34 91 234 5678", "status": "Interesado" },
+        "second": { "name": "Dentamed Centro Dental", "city": "Madrid · ES", "phone": "+34 91 555 0123", "status": "Contactado" },
+        "third": { "name": "Ortodoncia Premium", "city": "Madrid · ES", "phone": "+34 91 877 4421", "status": "Pendiente" },
+        "fourth": { "name": "Estética Dental Salamanca", "city": "Madrid · ES", "phone": "+34 91 902 3344", "status": "Cliente" }
+      },
+      "liveStatus": "Extracción en vivo · 4/12 negocios",
+      "exportLabel": "Exportar a Excel"
+    },
+    "socialProof": {
+      "eyebrow": "Por qué nos eligen",
+      "title": "Equipos comerciales que ya prospectan mejor",
+      "testimonials": {
+        "first": {
+          "quote": "Nos olvidamos de pagar listas de contactos. Cada lunes lanzamos 5 búsquedas y tenemos la semana planificada en 10 minutos.",
+          "author": "Lucía Pérez",
+          "role": "Sales Lead · Agencia Madrid"
+        },
+        "second": {
+          "quote": "La extracción de WhatsApp y horarios desde Maps nos cambió la vida. Ahora todo el equipo trabaja desde la misma lista compartida.",
+          "author": "Marco Salinas",
+          "role": "Co-founder · Pulse Studio"
+        },
+        "third": {
+          "quote": "Pasamos de exportar a mano cada negocio a tener un Excel limpio y deduplicado en segundos. Sin scripts, sin pelearse con la web.",
+          "author": "Andrea Rojas",
+          "role": "BDR · Latam Growth"
+        }
+      },
+      "stats": {
+        "first": { "value": "98%", "label": "de búsquedas completadas con datos limpios y deduplicados" },
+        "second": { "value": "7,2k+", "label": "negocios extraídos al mes por los equipos activos" },
+        "third": { "value": "<1 min", "label": "tiempo medio de una búsqueda end-to-end" }
+      }
+    },
+    "missions": {
+      "eyebrow": "Nuestra misión",
+      "title": "Que cada hora vendida valga más que la anterior",
+      "description": "Construimos Business Prospector porque odiamos perder semanas armando listas en hojas de cálculo. Estos son los tres principios que guían cada feature que enviamos.",
+      "items": {
+        "competition": {
+          "title": "Llegar antes que la competencia",
+          "body": "Detectar negocios locales en horas, no en semanas. Sin pagar bases de datos obsoletas ni cargar leads que ya nadie llama."
+        },
+        "publicData": {
+          "title": "Solo datos públicos, sin trucos",
+          "body": "Extraemos lo que cualquiera ve en Google Maps o Páginas Amarillas. Tú controlas qué guardar, compartir o descartar."
+        },
+        "team": {
+          "title": "Que tu equipo prospecte como uno solo",
+          "body": "Listas compartidas, carpetas colaborativas y notificaciones en tiempo real para que ningún prospecto se enfríe."
+        }
+      }
+    },
+    "features": {
+      "eyebrow": "Funcionalidades",
+      "title": "Todo lo que necesitas para llenar el pipeline esta semana",
+      "items": {
+        "streaming": {
+          "tag": "Núcleo",
+          "title": "Búsqueda en streaming",
+          "body": "Los negocios aparecen en la tabla mientras el motor sigue extrayendo. Cancelable y reintentable en cualquier momento."
+        },
+        "sources": {
+          "tag": "Fuentes",
+          "title": "Dos fuentes, un solo formato",
+          "body": "Google Maps como primaria y Páginas Amarillas como fallback. Datos normalizados, deduplicados y listos para CRM."
+        },
+        "prospects": {
+          "tag": "Workflow",
+          "title": "Marca prospectos al vuelo",
+          "body": "Un clic en el corazón y el negocio salta a tu lista personal o a una lista compartida con tu equipo."
+        },
+        "folders": {
+          "tag": "Colaboración",
+          "title": "Carpetas y listas compartidas",
+          "body": "Organiza búsquedas por campaña, cliente o sector. Invita a tu equipo con un email y trabajen sobre la misma vista."
+        },
+        "excel": {
+          "tag": "Datos",
+          "title": "Exporta a Excel limpio",
+          "body": "Un Excel con columnas estables, sin duplicados y con tu progreso de contacto. Ideal para pasarlo al CRM."
+        }
+      },
+      "streamingPreview": {
+        "first": "Café del Sol · Ciudad de México",
+        "second": "Bistró Lola · Polanco",
+        "third": "Restaurante Mar y Tierra · Roma Norte",
+        "fourth": "Antojería Casa Pepa · Coyoacán"
+      },
+      "foldersPreview": {
+        "first": { "name": "Campaña Q3", "searches": "{count} búsquedas" },
+        "second": { "name": "CDMX", "searches": "{count} búsquedas" },
+        "third": { "name": "Madrid", "searches": "{count} búsquedas" },
+        "fourth": { "name": "Compartido", "searches": "{count} búsquedas" }
+      }
+    },
+    "steps": {
+      "eyebrow": "Cómo funciona",
+      "title": "De una idea de prospección a una lista lista para llamar en 4 pasos",
+      "cta": "Probar el flujo completo",
+      "items": {
+        "define": {
+          "step": "01",
+          "title": "Define la búsqueda",
+          "body": "Categoría, ciudad y cantidad. Sin importar el país: Maps + Páginas Amarillas se adaptan al idioma local."
+        },
+        "stream": {
+          "step": "02",
+          "title": "Recibe en streaming",
+          "body": "Las filas aparecen en la tabla mientras el motor extrae. Empieza a calificar incluso antes de que termine."
+        },
+        "tag": {
+          "step": "03",
+          "title": "Marca, comenta y comparte",
+          "body": "Pulsa el corazón para mover un negocio a una lista personal o compartida. Tu equipo verá el cambio al instante."
+        },
+        "export": {
+          "step": "04",
+          "title": "Exporta o sigue en la app",
+          "body": "Descarga un Excel limpio, sigue trabajando dentro de Business Prospector o pasa los datos a tu CRM."
+        }
+      }
+    },
+    "benefits": {
+      "eyebrow": "Beneficios",
+      "title": "Más pipeline, menos hojas de cálculo",
+      "items": {
+        "speed": {
+          "title": "Velocidad real",
+          "body": "De cero a 100 negocios cualificados en menos de 4 minutos por búsqueda."
+        },
+        "consistent": {
+          "title": "Datos consistentes",
+          "body": "Nombre, teléfono, dirección, sitio web y horarios normalizados en cada fila."
+        },
+        "noScripts": {
+          "title": "Sin scripts ni proxies",
+          "body": "Olvídate de mantener tu propio scraper. Nosotros nos rotamos las fuentes por ti."
+        },
+        "history": {
+          "title": "Historial y notificaciones",
+          "body": "Cada búsqueda queda guardada. Te avisamos cuando un compañero comparte una lista contigo."
+        }
+      }
+    },
+    "finalCta": {
+      "badge": "¿Listo para empezar?",
+      "titleLead": "Lanza tu primera búsqueda en",
+      "titleAccent": "menos de un minuto",
+      "subtitle": "Conéctate con tu cuenta de Google. Sin configuración, sin tarjeta, sin sorpresas. Sales de la landing y entras directo a tu primera lista de prospectos.",
+      "ctaPrimary": "Iniciar sesión con Google",
+      "ctaSecondary": "Revisar funcionalidades"
+    }
+  },
+  "pricing": {
+    "hero": {
+      "badge": "Planes y precios",
+      "titleLead": "Elige el plan que",
+      "titleAccent": "mueve tu pipeline",
+      "subtitle": "Empieza gratis y sube cuando quieras desbloquear exportaciones, colaboración y herramientas de equipo. Sin permanencia, sin sorpresas.",
+      "disclaimer": "Precios en USD · Facturación mensual · IVA / impuestos calculados al pagar"
+    },
+    "featuredBadge": "Más popular",
+    "plans": {
+      "free": {
+        "name": "Gratis",
+        "pitch": "Para probar el motor de prospección sin compromiso.",
+        "ctaLabel": "Empezar gratis",
+        "badge": "Para empezar",
+        "features": {
+          "weekly": "5 búsquedas por semana",
+          "monthly": "20 búsquedas al mes",
+          "limit": "Hasta 24 resultados por búsqueda",
+          "history": "Historial guardado de tus búsquedas",
+          "profile": "Perfil personalizable"
+        },
+        "notIncluded": {
+          "export": "Exportar a Excel",
+          "collab": "Carpetas y listas compartidas con tu equipo",
+          "blacklist": "Lista negra de negocios",
+          "notifications": "Notificaciones de colaboración",
+          "messaging": "Mensajería, cronología y tareas"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "pitch": "Para freelancers y equipos pequeños que prospectan en serio.",
+        "ctaLabel": "Probar Pro",
+        "features": {
+          "weekly": "50 búsquedas por semana",
+          "monthly": "200 búsquedas al mes",
+          "limit": "Hasta 48 resultados por búsqueda",
+          "export": "Exportar a Excel",
+          "invite": "Invita miembros a carpetas y listas",
+          "blacklist": "Lista negra para excluir negocios",
+          "notifications": "Notificaciones de colaboración",
+          "history": "Historial guardado de tus búsquedas",
+          "profile": "Perfil personalizable"
+        },
+        "notIncluded": {
+          "messaging": "Mensajería interna por prospecto",
+          "timeline": "Cronología de actividad",
+          "tasks": "Tareas asignadas al equipo",
+          "manual": "Carga manual de prospectos"
+        }
+      },
+      "premium": {
+        "name": "Premium",
+        "pitch": "Para equipos que cierran cuentas y trabajan el pipeline completo.",
+        "ctaLabel": "Probar Premium",
+        "badge": "Para escalar",
+        "features": {
+          "unlimited": "Búsquedas ilimitadas",
+          "unlimitedHint": "sin tope mensual ni semanal",
+          "limit": "Hasta 100 resultados por búsqueda",
+          "proIncluded": "Todo lo del plan Pro",
+          "messaging": "Mensajería interna por prospecto",
+          "timeline": "Cronología de actividad",
+          "tasks": "Tareas asignadas al equipo",
+          "manual": "Carga manual de prospectos",
+          "manualHint": "desde /agregar-prospectos"
+        }
+      }
+    },
+    "comparison": {
+      "eyebrow": "Comparativa",
+      "title": "Todo lo que incluye cada plan",
+      "subtitle": "Compara funcionalidades de un vistazo y elige el plan que necesitas hoy. Puedes mejorarlo cuando crezca tu equipo.",
+      "featureHeader": "Funcionalidad",
+      "rows": {
+        "weekly": "Búsquedas por semana",
+        "monthly": "Búsquedas por mes",
+        "limit": "Resultados por búsqueda",
+        "history": "Historial de búsquedas",
+        "profile": "Perfil personalizable",
+        "export": "Exportar a Excel",
+        "folders": "Carpetas compartidas",
+        "lists": "Listas de prospectos compartidas",
+        "blacklist": "Lista negra de negocios",
+        "notifications": "Notificaciones de colaboración",
+        "messaging": "Mensajería interna por prospecto",
+        "timeline": "Cronología de actividad",
+        "tasks": "Tareas asignadas al equipo",
+        "manual": "Agregar prospectos manualmente"
+      },
+      "values": {
+        "freeWeekly": "5",
+        "proWeekly": "50",
+        "premiumWeekly": "Ilimitadas",
+        "freeMonthly": "20",
+        "proMonthly": "200",
+        "premiumMonthly": "Ilimitadas",
+        "freeLimit": "Hasta 24",
+        "proLimit": "Hasta 48",
+        "premiumLimit": "Hasta 100"
+      }
+    },
+    "faq": {
+      "eyebrow": "Preguntas frecuentes",
+      "title": "Lo que la gente nos suele preguntar",
+      "items": {
+        "card": {
+          "q": "¿Necesito tarjeta para el plan Gratis?",
+          "a": "No. Inicias sesión con Google y empiezas a usar Business Prospector con 5 búsquedas semanales sin introducir ningún dato de pago."
+        },
+        "switch": {
+          "q": "¿Puedo cambiar de plan o cancelar cuando quiera?",
+          "a": "Sí. Puedes subir, bajar o cancelar tu suscripción en cualquier momento desde tu panel de facturación. Mantienes el acceso hasta el final del período pagado."
+        },
+        "what": {
+          "q": "¿Qué cuenta como “una búsqueda”?",
+          "a": "Cada vez que lanzas el botón de Buscar con un par categoría + ubicación se descuenta una búsqueda, sin importar cuántos resultados devuelva."
+        },
+        "rollover": {
+          "q": "¿Las búsquedas no usadas se acumulan?",
+          "a": "No. El conteo semanal y mensual se reinicia automáticamente; las búsquedas no consumidas no pasan al siguiente período."
+        },
+        "team": {
+          "q": "¿Los planes Pro y Premium soportan equipo?",
+          "a": "Sí. Desde Pro puedes invitar miembros a carpetas y listas compartidas. Premium añade mensajería interna, tareas y cronología para coordinar el trabajo."
+        },
+        "payments": {
+          "q": "¿Qué métodos de pago aceptan?",
+          "a": "Estamos finalizando la integración de pagos. Cuando se active, aceptaremos tarjetas internacionales y los principales métodos locales de cada región."
+        }
+      }
+    },
+    "finalCta": {
+      "badge": "Empieza hoy",
+      "titleLead": "Prueba Business Prospector",
+      "titleAccent": "sin riesgo",
+      "subtitle": "Crea tu cuenta con Google y arranca con el plan gratis. Cuando necesites más volumen o colaboración, mejoras a Pro o Premium en un par de clics.",
+      "ctaPrimary": "Empezar gratis",
+      "ctaSecondary": "Volver al inicio"
+    },
+    "footerNote": "© {year} Business Prospector · Precios sujetos a cambios sin previo aviso"
+  }
+}

@@ -1,21 +1,22 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { History, Menu, X } from 'lucide-react'
+import { Link, usePathname } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { AuthNav } from '@/components/AuthNav'
 import { BrandLogo } from '@/components/BrandLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LocaleSwitcher } from '@/components/LocaleSwitcher'
 import { NotificationsPopover } from '@/components/NotificationsPopover'
+import { useSyncProfileLocale } from '@/hooks/useSyncProfileLocale'
 
 const links = [
   { href: '/', label: 'Inicio' },
   { href: '/carpetas', label: 'Carpetas' },
   { href: '/agregar-prospectos', label: 'Agregar prospectos' },
   { href: '/clientes-prospectos', label: 'Clientes prospectos' },
-]
+] as const
 
 export function AppHeader({
   showHistoryTrigger,
@@ -29,6 +30,8 @@ export function AppHeader({
 }) {
   const pathname = usePathname()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  /** Mantiene `profiles.preferred_locale` ↔ cookie ↔ locale activo en zonas autenticadas. */
+  useSyncProfileLocale()
 
   useEffect(() => {
     setMobileNavOpen(false)
@@ -131,6 +134,9 @@ function HeaderInner({
       <div className="flex items-center gap-2 min-[1200px]:gap-3 shrink-0">
         <NotificationsPopover />
         <div className="hidden min-[1200px]:block">
+          <LocaleSwitcher />
+        </div>
+        <div className="hidden min-[1200px]:block">
           <ThemeToggle />
         </div>
         <AuthNav />
@@ -179,9 +185,15 @@ function MobileNavDrawer({
             </li>
           ))}
         </ul>
-        <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
-          <span className="text-xs text-neutral-500">Tema</span>
-          <ThemeToggle />
+        <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-neutral-500">Idioma</span>
+            <LocaleSwitcher />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-neutral-500">Tema</span>
+            <ThemeToggle />
+          </div>
         </div>
       </nav>
     </div>

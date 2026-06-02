@@ -11,6 +11,8 @@ export type ProfileRow = {
   company: string | null
   phone: string | null
   avatar_url: string | null
+  /** Preferencia de idioma del usuario. Si la columna no existe en la BD, llega `null`. */
+  preferred_locale: 'en' | 'es' | null
 }
 
 export async function upsertMyProfile(supabase: SupabaseClient, userId: string, email: string) {
@@ -76,4 +78,29 @@ export async function uploadMyAvatar(
 export async function removeMyAvatarFiles(supabase: SupabaseClient, userId: string): Promise<{ error: Error | null }> {
   const { error } = await supabase.storage.from(AVATAR_BUCKET).remove([`${userId}/avatar`])
   return { error: error ? new Error(error.message) : null }
+}
+
+/**
+ * Guarda la preferencia de idioma del usuario. No falla si la columna
+ * `preferred_locale` aún no existe en la BD; en ese caso registra un warn
+ * y la cookie sigue siendo la fuente única (modo degradado).
+ */
+export async function updateMyPreferredLocale(
+  supabase: SupabaseClient,
+  userId: string,
+  locale: 'en' | 'es',
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ preferred_locale: locale, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+  if (error) {
+    /** Si la columna no existe (42703) lo tratamos como degradación, no como error fatal. */
+    if (/column .*preferred_locale.* does not exist/i.test(error.message) || error.code === '42703') {
+      console.warn('[profiles] preferred_locale column missing; skipping persistence.')
+      return { error: null }
+    }
+    return { error: new Error(error.message) }
+  }
+  return { error: null }
 }
