@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { AppHeader } from '@/components/AppHeader'
 import { Toast } from '@/components/Toast'
@@ -19,6 +20,7 @@ const inputClass =
   'mt-1 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 w-full max-w-lg'
 
 function PerfilInner() {
+  const t = useTranslations('profile')
   const user = useSupabaseUser()
   const fileRef = useRef<HTMLInputElement>(null)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
@@ -111,7 +113,7 @@ function PerfilInner() {
     setPendingFile(null)
     setAvatarUrl(nextAvatar)
     await load()
-    setSuccessMessage('Tu perfil se actualizó correctamente.')
+    setSuccessMessage(t('saved'))
   }
 
   const clearPhoto = async () => {
@@ -130,7 +132,7 @@ function PerfilInner() {
     })
     if (uErr) setError(uErr.message)
     else {
-      setSuccessMessage('Foto de perfil eliminada. Los demás datos se mantienen guardados.')
+      setSuccessMessage(t('photoRemoved'))
       await load()
     }
   }
@@ -140,27 +142,26 @@ function PerfilInner() {
       <AppHeader />
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-6">
         <div>
-          <p className="text-xs font-semibold uppercase text-indigo-600 dark:text-indigo-400">Cuenta</p>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Perfil</h1>
+          <p className="text-xs font-semibold uppercase text-indigo-600 dark:text-indigo-400">{t('eyebrow')}</p>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t('title')}</h1>
           <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-            Completa tus datos. Si subes una foto, se usará en los avatares del chat cuando otros colaboren contigo en
-            listas o búsquedas.
+            {t('subtitle')}
           </p>
         </div>
         <Link href="/" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline w-fit">
-          ← Inicio
+          {t('back')}
         </Link>
 
         {!loggedIn && (
           <p className="text-sm text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
             <Link href="/login" className="underline font-semibold">
-              Inicia sesión
+              {t('loginPrefix')}
             </Link>{' '}
-            para editar tu perfil.
+            {t('loginSuffix')}
           </p>
         )}
 
-        {loggedIn && loading && <p className="text-sm text-neutral-500">Cargando…</p>}
+        {loggedIn && loading && <p className="text-sm text-neutral-500">{t('loading')}</p>}
 
         {loggedIn && !loading && (
           <form
@@ -171,14 +172,14 @@ function PerfilInner() {
             }}
           >
             <div>
-              <p className="text-xs font-semibold uppercase text-neutral-500 mb-2">Foto de perfil</p>
+              <p className="text-xs font-semibold uppercase text-neutral-500 mb-2">{t('photo')}</p>
               <div className="flex flex-wrap items-center gap-4">
                 <div className="h-20 w-20 rounded-full overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-xs text-neutral-500">
                   {displayAvatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={displayAvatar} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    'Sin foto'
+                    t('noPhoto')
                   )}
                 </div>
                 <div className="flex flex-col gap-2">
@@ -191,7 +192,7 @@ function PerfilInner() {
                       const f = e.target.files?.[0]
                       if (f && f.size > 5 * 1024 * 1024) {
                         setSuccessMessage(null)
-                        setError('La imagen no debe superar 5 MB.')
+                        setError(t('imageTooLarge'))
                         return
                       }
                       setPendingFile(f ?? null)
@@ -202,7 +203,7 @@ function PerfilInner() {
                     onClick={pickFile}
                     className="rounded-lg px-3 py-2 text-xs font-semibold border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 w-fit"
                   >
-                    Elegir imagen
+                    {t('chooseImage')}
                   </button>
                   {(avatarUrl || pendingFile) && (
                     <button
@@ -210,39 +211,39 @@ function PerfilInner() {
                       onClick={() => void clearPhoto()}
                       className="text-xs text-red-600 dark:text-red-400 hover:underline w-fit"
                     >
-                      Quitar foto
+                      {t('removePhoto')}
                     </button>
                   )}
                 </div>
               </div>
-              <p className="mt-2 text-[11px] text-neutral-500">JPG, PNG, Webp o GIF. Máx. 5 MB.</p>
+              <p className="mt-2 text-[11px] text-neutral-500">{t('imageHelp')}</p>
             </div>
 
             <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
-              Nombre
+              {t('firstName')}
               <input className={inputClass} value={firstName} onChange={e => setFirstName(e.target.value)} />
             </label>
             <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
-              Apellido
+              {t('lastName')}
               <input className={inputClass} value={lastName} onChange={e => setLastName(e.target.value)} />
             </label>
             <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
-              Empresa
+              {t('company')}
               <input className={inputClass} value={company} onChange={e => setCompany(e.target.value)} />
             </label>
             <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
-              Correo electrónico
+              {t('email')}
               <input
                 className={inputClass + ' opacity-80 cursor-not-allowed'}
                 readOnly
                 value={user?.email ?? profile?.email ?? ''}
               />
               <span className="mt-1 block text-[11px] text-neutral-500">
-                Viene de tu cuenta de acceso (Google). Para cambiarlo, usa la configuración de tu proveedor de identidad.
+                {t('emailHelp')}
               </span>
             </label>
             <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
-              Teléfono
+              {t('phone')}
               <input
                 className={inputClass}
                 type="tel"
@@ -258,7 +259,7 @@ function PerfilInner() {
               disabled={saving}
               className="rounded-xl px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 w-fit"
             >
-              {saving ? 'Guardando…' : 'Guardar cambios'}
+              {saving ? t('saving') : t('save')}
             </button>
           </form>
         )}

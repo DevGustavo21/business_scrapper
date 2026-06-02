@@ -678,5 +678,45 @@
     "unsaved": "Unsaved changes",
     "error": "Error",
     "readOnly": "Read only"
+  },
+  "profile": {
+    "eyebrow": "Account",
+    "title": "Profile",
+    "subtitle": "Complete your details. If you upload a photo, it will be used in chat avatars when others collaborate with you on lists or searches.",
+    "back": "← Home",
+    "loginPrefix": "Sign in",
+    "loginSuffix": "to edit your profile.",
+    "loading": "Loading…",
+    "photo": "Profile photo",
+    "noPhoto": "No photo",
+    "chooseImage": "Choose image",
+    "removePhoto": "Remove photo",
+    "imageHelp": "JPG, PNG, WebP, or GIF. Max. 5 MB.",
+    "imageTooLarge": "The image must not exceed 5 MB.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "company": "Company",
+    "email": "Email address",
+    "emailHelp": "This comes from your sign-in account (Google). To change it, use your identity provider settings.",
+    "phone": "Phone",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "saved": "Your profile was updated successfully.",
+    "photoRemoved": "Profile photo removed. Your other details remain saved."
+  },
+  "excel": {
+    "sheet": "Businesses",
+    "filePrefix": "businesses",
+    "headers": {
+      "index": "#",
+      "name": "Name",
+      "address": "Address",
+      "city": "City",
+      "country": "Country",
+      "phone": "Phone",
+      "email": "Email",
+      "website": "Website",
+      "status": "Status"
+    }
   }
 }

@@ -678,5 +678,45 @@
     "unsaved": "Cambios sin guardar",
     "error": "Error",
     "readOnly": "Solo lectura"
+  },
+  "profile": {
+    "eyebrow": "Cuenta",
+    "title": "Perfil",
+    "subtitle": "Completa tus datos. Si subes una foto, se usará en los avatares del chat cuando otros colaboren contigo en listas o búsquedas.",
+    "back": "← Inicio",
+    "loginPrefix": "Inicia sesión",
+    "loginSuffix": "para editar tu perfil.",
+    "loading": "Cargando…",
+    "photo": "Foto de perfil",
+    "noPhoto": "Sin foto",
+    "chooseImage": "Elegir imagen",
+    "removePhoto": "Quitar foto",
+    "imageHelp": "JPG, PNG, WebP o GIF. Máx. 5 MB.",
+    "imageTooLarge": "La imagen no debe superar 5 MB.",
+    "firstName": "Nombre",
+    "lastName": "Apellido",
+    "company": "Empresa",
+    "email": "Correo electrónico",
+    "emailHelp": "Viene de tu cuenta de acceso (Google). Para cambiarlo, usa la configuración de tu proveedor de identidad.",
+    "phone": "Teléfono",
+    "save": "Guardar cambios",
+    "saving": "Guardando…",
+    "saved": "Tu perfil se actualizó correctamente.",
+    "photoRemoved": "Foto de perfil eliminada. Los demás datos se mantienen guardados."
+  },
+  "excel": {
+    "sheet": "Negocios",
+    "filePrefix": "negocios",
+    "headers": {
+      "index": "#",
+      "name": "Nombre",
+      "address": "Dirección",
+      "city": "Ciudad",
+      "country": "País",
+      "phone": "Teléfono",
+      "email": "Correo",
+      "website": "Sitio web",
+      "status": "Estado"
+    }
   }
 }

@@ -11,10 +11,25 @@ interface Props {
 
 export function ExportButton({ negocios, categoria, etiquetaUbicacion }: Props) {
   const t = useTranslations('exportButton')
+  const tExcel = useTranslations('excel')
   if (negocios.length === 0) return null
   const handleExport = async () => {
     const { exportToExcel } = await import('@/lib/exportExcel')
-    exportToExcel(negocios, categoria, etiquetaUbicacion)
+    exportToExcel(negocios, categoria, etiquetaUbicacion, {
+      sheet: tExcel('sheet'),
+      filePrefix: tExcel('filePrefix'),
+      headers: {
+        index: tExcel('headers.index'),
+        name: tExcel('headers.name'),
+        address: tExcel('headers.address'),
+        city: tExcel('headers.city'),
+        country: tExcel('headers.country'),
+        phone: tExcel('headers.phone'),
+        email: tExcel('headers.email'),
+        website: tExcel('headers.website'),
+        status: tExcel('headers.status'),
+      },
+    })
   }
   return (
     <button
