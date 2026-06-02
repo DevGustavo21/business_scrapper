@@ -1,6 +1,13 @@
 import type { NextConfig } from 'next'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const projectRoot = dirname(fileURLToPath(import.meta.url))
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: projectRoot,
+  },
   // Binario serverless (no empaquetar el .br dentro del bundle JS).
   serverExternalPackages: ['@sparticuz/chromium'],
   // NFT no detecta require() dinámico de browsers.json dentro de playwright-core (Vercel #211).
